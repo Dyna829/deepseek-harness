@@ -1,3 +1,20 @@
+/**
+ * @file Tool 参数的 schema DSL。
+ *
+ * 提供一套**像写 TypeScript 类型一样**的 API 来声明 tool 的参数，例如：
+ *   ```ts
+ *   defineTool({
+ *     name: 'foo',
+ *     args: { x: { type: 'number', min: 0 } },
+ *   })
+ *   ```
+ * 然后这套 DSL 会被编译成 JSON Schema 发给模型（模型能直接看懂），同时也能在
+ * TypeScript 端用 `InferArgs<typeof tool>` 反推出参数类型，**两边的类型保持一致**。
+ *
+ * 设计动机：直接写 JSON Schema 容易写错（错别字、错嵌套），DSL 让工具作者少犯错，
+ * 编译期就能检查。
+ */
+
 /** Unified JSON-value schema DSL, inference, compilation, and typed tool helper. @module dsh-tools/schema */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'

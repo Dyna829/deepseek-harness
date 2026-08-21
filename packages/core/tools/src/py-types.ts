@@ -1,4 +1,14 @@
 /**
+ * @file Code Mode 投影：Python 版本。和 `ts-types.ts` 是兄弟文件，根据加载的
+ * `CodeRuntime.language` 选其中一个用。
+ *
+ * 关键设计：
+ *   - 对象类型的参数/输出渲染成具名 `TypedDict`，**不**退化成 `dict[str, Any]`，
+ *     这样在 `mode: 'code'` 下（没有 native schema 一起发）类型信息也能保留下来；
+ *   - 标识符合法性按 Python 自己的 `str.isidentifier()` 规则判断（支持 Unicode XID）。
+ */
+
+/**
  * Code Mode codegen — Python flavor. The pure projection from registered tool schemas to the
  * Python SDK text the model programs against under `runtime.language === 'python'`. Sibling of
  * {@link ./ts-types.ts | ts-types.ts}; the two files are two projections of the same registry

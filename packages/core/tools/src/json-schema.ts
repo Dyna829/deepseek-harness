@@ -1,4 +1,23 @@
 /**
+ * @file 受限 JSON Schema 子集。
+ *
+ * 这个子集被 tool 输出、Code Mode 生成的类型、subagent、workflow **共同**使用。
+ * 为什么限定：JSON Schema 全文太大、容易出歧义；这里只允许「我们能稳定解释」的一小部分。
+ *
+ * 接受：
+ *   - 任意 JSON 根；
+ *   - 仅注释的 schema（无 type，相当于 `any`）；
+ *   - 单个 scalar `type`；
+ *   - object 的 `properties` / `required` / 布尔 `additionalProperties`；
+ *   - array 的 `items`；
+ *   - 标量专属的 `enum` / `const`；
+ *   - 严格 `oneOf`。
+ *
+ * 不接受：其他关键字会被 `assertSupportedJsonSchema` 直接拒掉，不静默放过。
+ * 要求 object 根的消费者可以调 `assertObjectJsonSchema` 二次校验。
+ */
+
+/**
  * Enforced JSON Schema subset shared by tool outputs, generated Code Mode
  * types, subagents, and workflows. The subset accepts any JSON root, an
  * annotation-only schema for unconstrained JSON, one scalar `type`, object

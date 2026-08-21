@@ -1,4 +1,19 @@
 /**
+ * @file Tool 调用的 UI 渲染意图类型。
+ *
+ * 核心想法：让 tool 作者**声明**「我这个调用在 UI 上想呈现成什么样子」，
+ * 但**不**写实际的 UI 代码。
+ *
+ * 三种基本卡片：
+ *   - `GenericCallView`：默认卡片（标题 + 分类图标 + 关键输入）；
+ *   - `TerminalCallView`：终端类调用（运行命令、看输出）；
+ *   - `DiffCallView`：单文件改动（oldText → newText 渲染成 diff）。
+ *
+ * 工具还可以声明 `presentResult` 给结果也提供渲染意图，让 UI 桥接层不需要
+ * 写一堆 if-name === 'xxx' 的特殊逻辑。
+ */
+
+/**
  * Tool render-intent vocabulary: the provider-neutral types a tool declares via
  * `ToolDefinition.presentCall`/`ToolDefinition.presentResult` to say how one of its calls
  * renders in a UI (an editor's tool-call card, a CLI log line).

@@ -1,4 +1,17 @@
 /**
+ * @file Code Mode 投影：把注册的 tool schema 编译成 TypeScript SDK 文本，喂给模型。
+ *
+ * 模型在 prompt 里看到一段 `declare const tools = { ... }`，每一项都是
+ * `<tool name>(args): Output` 的形状，类型是 tool 自己的 schema 编译出来的。
+ * 模型就在 `run_code` 内部 `import { tools } from '...'` 然后 `tools.foo({...})`。
+ *
+ * 和 `json-schema.ts` 的关系：
+ *   - `json-schema.ts` 负责「JSON Schema 的解析和校验」；
+ *   - 本文件负责「把同一份 schema 编译成 TypeScript 类型文本」；
+ *   - 两者是同一个 store 的两个投影。
+ */
+
+/**
  * Code Mode codegen: the pure projection from registered tool schemas to the TypeScript SDK
  * text the model programs against (the `tools:sdk` prompt section). Sibling of
  * `json-schema.ts` — `schemas()` (native function calling) and this module (the generated

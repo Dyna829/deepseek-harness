@@ -1,3 +1,16 @@
+/**
+ * @file Tool 包自带的 invariant。
+ *
+ * 三个层面的不变量检查：
+ *   1. **管线单调性**：一次 tool 调用只能沿着 `pre → execute → post` 单调推进，不能往回走；
+ *   2. **最终快照 frozen**：`tools/result` 事件携带的 `execution` 和 `result` 都必须 Object.frozen，
+ *      才能被持久化、被 replay；
+ *   3. **Code-dispatch 闭环**：每个 `tool/code-dispatch-start` 必然配对一个 `tool/code-dispatch`，
+ *      且子调用的 `parentCallId` 必须属于同 root。
+ *
+ * 这些 invariant 是「replay 真的能复现」的前提。
+ */
+
 /** Package-owned tool-pipeline invariants. @module @deepseek-ai/dsh-tools/invariant */
 
 import type { Context } from '@deepseek-ai/cordis'

@@ -1,4 +1,20 @@
 /**
+ * @file Code Mode 下的「`run_code`」工具实现 + 子调用桥。
+ *
+ * Code Mode 模式下，模型**只**看到一个 tool：`run_code`。
+ * 模型写一段代码（Python 或 TypeScript），代码里 import SDK 调所有具体 tool。
+ *
+ * 本文件的职责：
+ *   1. 定义 `run_code` 工具（`createRunCodeTool`）：接收 `code` + `language`，
+ *      通过加载的 `CodeRuntime` 跑代码、返回 curated 结果；
+ *   2. 桥接子调用：把代码里对 SDK tool 的调用「走一遍」工具调度器（pre/execute/post），
+ *      记成 `tool/code-dispatch-start` + `tool/code-dispatch` 事件，让 UI 看到的和
+ *      native tool 调用**完全一样**；
+ *   3. 保证「外层一个 curated 结果 + 内层 N 个子调用」这种结构，model 上下文里只看到
+ *      外层结果（不污染历史），但 log 里能看到全部子调用（保证可重放）。
+ */
+
+/**
  * Code Mode `run_code` transport. Programs call the registry's agent-visible
  * tools through nested executions scheduled under the native concurrency
  * contract; each sub-dispatch is logged for reconstruction, while only the

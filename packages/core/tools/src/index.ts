@@ -1,4 +1,30 @@
 /**
+ * @file Tool 系统的中枢：注册表 + 展示模式 + pre/guard/around/post/result 执行管线。
+ *
+ * 这个包是 dsh 中「Tool」概念的所有东西：
+ *   - **注册表**（`ctx.tools`）：scope 化的 tool 注册，按 agent scope 看到不同的 tool 集合；
+ *   - **展示模式**（`Config.mode`）：native / code / sdk —— 决定模型看到的 tool 列表形态；
+ *     其中 code 和 sdk 模式会基于一种语言 SDK（TypeScript / Python）暴露「一个 run_code 工具」，
+ *     让模型通过它间接调用所有具体 tool；
+ *   - **执行管线**（`TOOL_RUNTIME_SCHEDULER`）：
+ *     pre → guard → around → body(自己跑) → post → result，每一步都是可拦截点；
+ *   - **Code Mode 桥**：把 `run_code` 内部的子调用（sub-dispatch）转换成 `tool/call` + `tool/result`，
+ *     让 UUI 看到的和 native tool 调用长得一样。
+ *
+ * 文件拆分：
+ *   - `index.ts`         — 注册表 + 调度器主入口
+ *   - `types.ts`         — 持久化事件类型（`tool/code-dispatch-start`、`tool/code-dispatch`）
+ *   - `schema.ts`        — TypeScript-like schema DSL，编译成 JSON Schema 给模型看
+ *   - `json-schema.ts`   — JSON Schema 校验
+ *   - `presentation.ts`  — 工具的 UI 渲染意图（call card、diff view、terminal view）
+ *   - `code-mode.ts`     — Code Mode 的 run_code 工具 + 子调用桥
+ *   - `ts-types.ts`      — 把 tool schema 渲染成 TypeScript SDK 文本
+ *   - `py-types.ts`      — 把 tool schema 渲染成 Python SDK 文本
+ *   - `invariant.ts`     — 管线单调性 + 最终快照 frozen + code-dispatch 闭环
+ *   - `testing.ts`       — 测试辅助
+ */
+
+/**
  * Tool registry, model presentation modes, and pre/guard/around/post/result
  * execution pipeline.
  * @module @deepseek-ai/dsh-tools

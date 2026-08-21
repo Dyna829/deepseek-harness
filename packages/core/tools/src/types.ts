@@ -1,4 +1,17 @@
 /**
+ * @file Tool 包往 session 持久化事件上挂载的两个事件类型。
+ *
+ * 这两个事件都**只用于持久化和 UI**，不进入 `deriveMessages()`（即不会让 LLM 看到）：
+ *   - `tool/code-dispatch-start`：在 run_code 内部，**当调度器真正开始派发**一个子调用时记录；
+ *   - `tool/code-dispatch`：子调用**真正结算**时记录（abort 也会记录为 `isError: true`）。
+ *
+ * 关键设计点：
+ *   - 这两个事件**只在子调用真正发生**时记录，排队中但没启动的子调用不会留下记录；
+ *   - 子调用有确定性子 id（`<parent>:code:<n>`），按提交顺序编号；
+ *   - `arguments` 字段是 dispatch 之前 JSON 归一化过的值，所以 append 不会因为形状问题失败。
+ */
+
+/**
  * Durable Tool event vocabulary shared with type-only consumers.
  *
  * @module @deepseek-ai/dsh-tools/types

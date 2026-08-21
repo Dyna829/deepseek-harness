@@ -1,3 +1,14 @@
+/**
+ * @file Tool 注册表测试用的标准 fixture。
+ *
+ * 仓库里的测试需要「一个能跑、有可读返回值」的 tool；本文件提供的
+ * `defineContentToolFixture` 让测试代码以**和正式 tool 一样的注册方式**声明
+ * 一个 fixture（不是绕开 `defineTool`）。
+ *
+ * 注意：fixture 故意让 content blocks 当 canonical JSON value（生产 tool **不应该**
+ * 这么干，必须声明自己的 DTO 输出）。这是测试的「最快造一个能跑的 tool」的方式。
+ */
+
 /** Canonical tool-definition fixtures for repository tests. @module dsh-tools/testing */
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
