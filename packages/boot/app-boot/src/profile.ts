@@ -1,6 +1,28 @@
 /**
- * Profile discovery, initialization, and patch-layer composition for the
- * `dsh --profile` launcher family.
+ * @file `dsh --profile` 启动族的 profile 发现、初始化和 patch 层组合。
+ *
+ * 本包（`dsh-app-boot`）里的「profile 单元」—— 把「`$DSH_HOME/profiles/<name>` 是一棵
+ * 独立可插拔的 plugin 树」这件事，封装成对外的 `initProfile` / `loadProfile` /
+ * `composeEntries` / `healProfilesModuleFallback` 几个动词。
+ *
+ * 概念图：
+ *   $DSH_HOME/profiles/<name>/
+ *     package.json            ← 声明 dependencies + dsh.profile.bundles
+ *     cordis.patch.yml        ← 用户自己的 patch 层（启动时 + HMR 热重载）
+ *     pnpm-workspace.yaml     ← nodeLinker: hoisted，让 out-of-tree 插件能装
+ *     node_modules/           ← 用户的 pnpm 树；out-of-tree 插件装在这里
+ *
+ * 模块解析是「双锚点」：bundle 名先在 dsh 安装目录（launcher 自己的 package）里找，
+ * 找不到再去 profile 目录。`$DSH_HOME/profiles/node_modules`（一个平铺的 symlink
+ * 目录，每个包一个 symlink，指向 dsh 安装的真实目录）让**任何** profile 都能用
+ * Node 的 parent-walk 找到 in-box 插件——根本不用 pnpm 接管它。
+ *
+ * 与其他模块的连接点：
+ *   - 同包 `index.ts` 的 `loadOptionalPatches` / `loadOverlayPatches` /
+ *     `renderConfigDump` 都消费本文件组装出的 `PatchOptions[]`
+ *   - `dsh-home-paths` 提供 `$DSH_HOME`
+ *   - `cordis-plugin-include` 的 `applyEntryPatches` 真正执行「叠层」
+ */
  *
  * A profile is a directory under `$DSH_HOME/profiles/<name>` holding a
  * `package.json` (out-of-tree plugin dependencies plus the profile manifest

@@ -1,9 +1,27 @@
 /**
- * Shared boot glue for the app bins (`dsh`, `dsh-acp-demo`): load the gitignored
- * `.env`, install the fail-loud Loader guards, resolve the config path (snapshot-aware), load the
- * optional user patch layers from the Harness home (`~/.dsh`), expose its path resolver to
- * config expressions, and drive the Cordis Loader against a leaf `cordis.yml` until the tree settles.
- * @module @deepseek-ai/dsh-app-boot
+ * @file `dsh` / `dsh-acp-demo` 等可执行文件的共享启动胶水。
+ *
+ * 上游（被 `cmdline/` 的 `boot()` 调用）—— 在 Cordis Loader 真正跑起来之前
+ * 把所有「必须就绪」的事做完；本身**不**实现 Loader 调度本身，那是
+ * `@deepseek-ai/cordis-plugin-loader` 的事。
+ *
+ * 职责分块：
+ *   1. 解析 `cordis.yml`（replay 模式下自动换成 `cordis.snapshot.yml`）
+ *   2. 加载分层 `.env`：inherited > 项目 cwd > `$DSH_HOME`；
+ *      同时拦截「只能由 launching environment 提供」的名字（PATH / GIT_* / SSL_* 等），
+ *      这些是「决定这个进程怎么跑」的变量，**.env 里写就是越权」
+ *   3. 挂上 `installFailLoud` 守护，把 Loader 启动期的 unhandledRejection
+ *      翻成一行诊断 + `exit(1)`，并给 terminal-owning 表面留 `release` 钩子恢复 TTY
+ *   4. 加载 profile / overlay / 可选 user patch layer，HMR 起来后还会热重载
+ *   5. 提供 `renderConfigDump` 给 `dsh config dump` 用，复用 `boot()` 同一份
+ *      `applyEntryPatches` 路径，保证 dump 出的就是真正会 mount 的
+ *
+ * 与其他模块的连接点：
+ *   - `cmdline/` 的 `boot()` 在拼装好 argv 之后调用本文件的 `loadEnv` / `loadLayeredEnv` /
+ *     `installFailLoud` / `mountRootInclude` / `watchUserPatches`
+ *   - `profile.ts`（同包）负责 profile 目录的发现和初始化
+ *   - `dsh-home-paths` 提供 `$DSH_HOME` 解析
+ *   - `dsh-launch-environment` 提供「按层 source 的环境快照」
  */
 
 import { pathToFileURL } from 'node:url'
@@ -375,6 +393,15 @@ export interface ConfigDumpLayer {
  * @param warn - sink for skipped-patch diagnostics; defaults to stderr.
  * @returns the composed entry list rendered as a YAML document with
  * source comment separators.
+ *
+ * @description 中文说明：
+ *   `dsh config dump` 用：把 base config + 全部 overlay 层展平成**真正会被
+ *   `boot()` 挂上**的 entry 序列，并按「这一行最初来自哪个文件 / 哪一层改过它」
+ *   插 `# ==` 注释。这事不能「在 dump 路径里重写一遍 patch 算法」——会跟 boot
+ *   路径漂；所以这里就**只调一次 `applyEntryPatches`，然后用连续前缀快照去 diff**
+ *   （snapshot_k = 1..k 层 flatten 后的结果）。每两层快照之间，位置 i 上内容变了
+ *   就记「layer k 改过 row i」；长度增加的那段就归属「layer k 引入」。
+ *   关键不变量：patch 算法只 in-place 改 row 或 append，所以同位置 index 就是同一行。
  */
 export function renderConfigDump(
   binName: string,
@@ -605,6 +632,16 @@ export const FAIL_LOUD_RELEASE_TIMEOUT_MS = 2_000
  *   terminal-owning surface to restore the terminal. Its own failure is
  *   swallowed because the pending fatal exit already owns the outcome.
  * @returns the uninstaller that removes the rejection handler.
+ *
+ * @description 中文说明：
+ *   Loader 启动期插件并发挂载，**有可能**在用户终端已经被 surface 抢到之后
+ *   才 reject。直接 `process.exit(1)` 会让 raw mode / 键盘协议卡死，
+ *   shell 里下一个 prompt 还会看到上一次 query 的回包。
+ *
+ *   所以这里：先写一行诊断（不能被 release 吞掉），再 `Promise.race(release, 2s timeout)`，
+ *   timeout 是「disposer 卡死也得让它退出 1，而不是空 event loop 退出 0」的兜底。
+ *   `exiting` 锁是同一段不变量：handler 保留到 release 完成之后才卸，所以
+ *   第二次 rejection 不能让它「在 teardown 中途再杀一次进程」。
  */
 export function installFailLoud(
   binName: string,

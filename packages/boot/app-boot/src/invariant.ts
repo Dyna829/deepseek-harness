@@ -1,6 +1,12 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-app-boot`.
- * @module @deepseek-ai/dsh-app-boot/invariant
+ * @file `dsh-app-boot` 的 invariant companion 入口。
+ *
+ * 本包是「boot glue」——把 env 加载、Loader 挂载、HMR 起来、profile 层组合这些
+ * 早期一次性事件做对。它自己不暴露长期 Service（`installFailLoud` /
+ * `loadLayeredEnv` / `mountRootInclude` 都是函数），所以目前**没有**运行时
+ * 不变量要守——`install` 是空实现，配套的协议映射在 boundary / replay
+ * 测试里覆盖。如果未来加一个「挂在 boot 期」的状态机（例如 launcher 事件总线），
+ * 就在 `install` 里加监听即可。
  */
 
 /* jscpd:ignore-start */
