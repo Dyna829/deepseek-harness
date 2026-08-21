@@ -1,7 +1,26 @@
 /**
- * Client projection of generated Typert Remote descriptors. Contributions
- * install traced `remote.<namespace>` services; no JavaScript Proxy
- * participates in method lookup, invocation, or type exposure.
+ * @file Host 端 Gateway 的 Client 镜像：把生成的 Remote 描述符翻成可调用的 Service。
+ *
+ * Host 端用 `ctx.typertGateway.invoke({ namespace, method, args })`；Client 端想要
+ * `ctx.remote.<namespace>.<method>(args)` 的语法——本文件做的就是**这件事**。
+ *
+ * 设计取舍：
+ *   - **不用 JS Proxy**：方法查找、调用、类型暴露都不走 Proxy。`$mount` 时按
+ *     generated 描述符**显式 install** 到 `remote.<ns>` Service，调用是闭包。
+ *     这样：
+ *       (a) 类型完全静态，IDE 跳转型定义无须 runtime 反射；
+ *       (b) install / dispose 是**有界**的 effect，知道何时被卸载；
+ *       (c) 没有「Proxy 漏引用导致 GC 不掉」之类边界问题。
+ *   - **mount 串行化**：所有 `$mount` / dispose 走 `mutations` 队列，避免
+ *     多个贡献方同时往同一 namespace 注册时抢锁。
+ *   - **事件订阅 keyed by 注册而不是 listener**：两个 fiber 用同一个函数对象
+ *     订阅同一事件时，每个 disposer 只撤回自己的那份。
+ *
+ * 与其他模块的连接点：
+ *   - `index.ts` 的 `TypertGateway` 接收 invoke；`ctx.connection` 把响应翻成
+ *     Host 的返回值
+ *   - `dsh-typert-protocol` 给出 `TypertRemoteContribution` / `InvocationDescriptor`
+ *   - 客户端 host 程序（ACP bridge 等）会 `$mount(generatedContribution)`
  */
 
 import { Service } from '@deepseek-ai/cordis'

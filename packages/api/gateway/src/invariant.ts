@@ -1,6 +1,11 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-api-gateway`.
- * @module @deepseek-ai/dsh-api-gateway/invariant
+ * @file `dsh-api-gateway` 的 invariant companion 入口。
+ *
+ * 本包没有需要持续守的运行时不变量：`ctx.typertGateway` 每次 invoke 都**重新
+ * 读**权威的 Cordis Services + Typert 注册表（不是缓存的快照），`ctx.remote`
+ * 的客户端 mutations（`$mount` / `$on`）都跑在单一 owned effect 里序列化。
+ * 协议/契约的边界在 `dsh-typert-protocol` / connection 测试里覆盖。
+ * `install` 留作未来在 `/api` RPC 拦截器或 Service 注册期挂不变量时的占位。
  */
 
 /* jscpd:ignore-start */

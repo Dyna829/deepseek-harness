@@ -1,7 +1,28 @@
 /**
- * Live Typert Remote dispatch over Cordis Services and registered providers.
- * Transport, request correlation, and response envelopes belong to Connection.
- * @module @deepseek-ai/dsh-api-gateway
+ * @file 把「Typert 描述的 Remote 方法」从 Host 侧真正调度起来。
+ *
+ * 在 Host 端，作为 Cordis Service（`ctx.typertGateway`）暴露给本地调用方。
+ * 职责分两块：
+ *   1. **解析 endpoint** → invocation descriptor：先用 Typert 注册表里的 strict
+ *      描述（生成器产物），找不到就退到 SRC marker（`@typert remote`）—— 严格
+ *      描述一旦曾经注册又被撤掉，**禁止**回退到 SRC（`definition-unavailable`）。
+ *   2. **执行调用**：按描述符解析 `ctx` / 参数（Typert 编码器），拿到 receiver，
+ *      `Reflect.apply` 真正的 Service 方法；strict 描述符会校验返回值，weak
+ *      描述符对 `undefined` 走「无 value 字段」通道。
+ *
+ * **不**负责：传输、request correlation、响应信封——这些归
+ * `@deepseek-ai/dsh-client-connection`。本文件只暴露 carrier-independent
+ * 的 `invoke(request): Promise<unknown>`；`dispatchRpc` 走 `ctx.connection.rpc`
+ * 挂上 `/api` 命名空间。
+ *
+ * 同包 `client/` 是镜像：把同一套描述符从「被调方」翻成「调用方」——
+ * `ctx.remote.<ns>.<method>(args)`。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-typert-protocol`：定义 `InvocationDescriptor` / `remoteMethods` /
+ *     `TypertGatewayBinding` 等核心类型
+ *   - `dsh-client-connection`：挂 RPC + 拿 `signal`
+ *   - 任何标了 `@typert remote` 的 Service（host 端）会被 SRC 路径发现
  */
 
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
@@ -86,8 +107,19 @@ class RemoteInvocationCancelled extends Error {
  * Resolve strict generated definitions or conservative SRC markers against
  * current Cordis Services and Typert providers.
  * @typert service typertGateway
+ *
+ * @description 中文说明：
+ *   Host 端 Remote 调用的「单一入口」Service：
+ *     - 挂载时在 `ctx.connection.rpc` 上登记 `/api` 拦截器（trusted-host 权限）；
+ *     - 每次调用走 strict → SRC 的二段解析，并把任何不在 strict schema 的
+ *       参数/返回值翻成 `TypertGatewayError`（带稳定的 error code）；
+ *     - 任何**已见过** strict 但已被撤销的 endpoint 直接 fail，不让 SRC 顶替
+ *       —— 这就是「strict 撤回后禁止回退」的具体实现；
+ *     - 普通业务抛错**保留**原始身份（不包成 gateway error），让上层按业务
+ *       语义处理。
+ *   关键不变量：`srcClaims` 在每次 `internal/service` 触发时清空，让 Service
+ *   变化（重注册 / 卸载）后下一次解析能重新走一遍。
  */
-export class TypertGatewayService extends Service implements TypertGateway {
   static inject = ['typert']
 
   private srcClaims: ReadonlySet<string> | undefined
