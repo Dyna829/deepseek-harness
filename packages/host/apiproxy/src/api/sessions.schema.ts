@@ -1,8 +1,32 @@
 /**
- * sessions domain zod schemas (names derived from map keys: sessionListRequestSchema /
- * sessionListValueSchema). SessionEvent passthrough = strict envelope (type/seq/time) + wide
- * data: the merge-extensible event API keeps an unknown-type branch at the union level,
- * with no field-level passthrough. SessionId brand cast point: sessionIdSchema, and only there.
+ * @file `sessions` domain 的 zod schema——wire 上**唯一**的 schema 守门。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **schema 名从 `rpc-map.ts` 派生**：`sessionListRequestSchema` /
+ *     `sessionListValueSchema` 等**机械**对应 method key——加方法时
+ *     `rpc-map.ts` 加一行，这里加两个 schema，编译期就 fail 当「漏写」。
+ *   - **`SessionId` / `MessageId` brand cast 各只一处**（`sessionIdSchema` /
+ *     `messageIdSchema`）——wire 上**全部** brand 都从这两个 schema 派
+ *     生，**别**自己 `z.string().min(1) as SessionId` 一份。`workspaceIdSchema`
+ *     也住本文件而不是 `workspace.schema`——`session.create` 引用它，
+ *     `workspace.schema` 反过来引用 `sessionIdSchema`，schema 模块**必须
+ *     保持 DAG**（顶层 import 互引 = 加载期 TDZ）。
+ *   - **`SessionEvent` passthrough = strict envelope + wide data**：envelope
+ *     (`type` / `seq` / `time`) **严格**——未知 `type` 走 union 级别的
+ *     unknown-type 分支（merge-extensible event API），**不**做字段级
+ *     passthrough。client 端 fold 走「documented default」处理未知。
+ *   - **Schema 模块是 wire 边界的**「**truth**」**：host 端 z 解析之后
+ *     才走 `rpcId` echo + invoke；client 端 z 解析通过才把请求推给
+ *     carrier。z 解析失败 → `RpcError('bad-request', { issues })`。
+ *
+ * 与其他模块的连接点：
+ *   - `rpc-map.ts` 的 `RequestPayload` / `ResponseValue` 提供类型
+ *   - `rpc.schema.ts` 的 `Wire` envelope
+ *   - `sessions.ts` 是 type-only 入口
+ *   - `session-search.ts` 的 `SESSION_SEARCH_RESULT_LIMIT` /
+ *     `SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS` 在 search schema 里硬卡
+ *   - `events.ts` 的 `ToolEventView` 在 history entry 视图里出现
+ *   - `workspace.ts` 的 `WorkspaceId` 在 prompt 上下文里出现
  */
 
 import { z } from 'zod'

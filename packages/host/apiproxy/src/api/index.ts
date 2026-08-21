@@ -1,7 +1,32 @@
 /**
- * apiproxy contract-layer barrel. api/ has zero Node dependencies and is
- * importable from the browser; the TS interfaces are the authoritative contract, while HTTP,
- * WebSocket, and in-process SSE are merely physical channels (four-quadrant message model).
+ * @file `apiproxy` contract-layer barrel——`api/` 子树的统一入口。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **`api/` 零 Node 依赖**：browser 可 import。TS interface 是**权威
+ *     contract**；HTTP / WebSocket / in-process SSE / 等等**只是物理
+ *     channel**，不影响语义。
+ *   - **「新 domain = 一个新 file pair + 这个 barrel 加一个 field +
+ *     `rpc-map.ts` 加一行」**：扩展点是**显式**的。漏改一处 compile 报错
+ *     而**不**是 wire 跑起来才看到。
+ *   - **`downloads` 是 host-only**：放在 `ApiProxy` 而不是 `IApiClient`——
+ *     `downloads` 是 HTTP GET，**不**走 wire envelope；client 端没有
+ *     发起「下载 zip」这种语义。
+ *   - **「`respond` 不是 domain method」**：它是 server 端收 client response
+ *     的入口（approval / user-question 之类需要 client 端拍板），所以
+ *     注释明确说「不是 domain method」——加 domain 时**不**会想「我是不是
+ *     也要加一个 `respond` 回去」。
+ *   - **「four-quadrant message model」**：ClientRequest / ClientResponse /
+ *     ServerRequest / ServerResponse + RpcReceipt（载体收据）。这条命名
+ *     不变量是 wire 协议层的**唯一**真理——任何加进来的 endpoint 都得
+ *     走这四个象限之一。
+ *
+ * 与其他模块的连接点：
+ *   - `api/*.ts` 每个 file 是一个 domain interface + payload types
+ *   - `rpc-map.ts` 把 domain 映射成 `RequestPayload` / `ResponseValue` /
+ *     `RpcMethodMap` 三个 generic
+ *   - `rpc.ts` + `rpc.schema.ts` 是 wire 协议层
+ *   - `api-proxy.ts`（host 端实现）+ `fetch/client.ts`（client 端）
+ *     都 import 这里的 interface
  */
 
 import type { SessionsApi } from './sessions.ts'

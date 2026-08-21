@@ -1,8 +1,30 @@
 /**
- * Four-quadrant RPC message model. Channels and messages are decoupled: HTTP,
- * WebSocket, and in-process SSE are physical carriers, while logical messages
- * are channel-independent and form a four-member discriminated union.
- * api/ contract layer: zero Node dependencies, importable from the browser.
+ * @file 「Four-quadrant RPC」消息模型——apiproxy 的 wire 协议层。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **Channel 和 message 解耦**：HTTP / WebSocket / in-process SSE / 等等
+ *     都**只是物理载体**；逻辑 message 是**通道无关**的 4 元 discriminated
+ *     union（`ClientRequest` / `ClientResponse` / `ServerRequest` /
+ *     `ServerResponse` + `RpcReceipt`）。换 carrier 不换语义。
+ *   - **`RpcId` 是「发起方 mint，响应方 echo」**：client-request 时 client
+ *     mint；server-request（要 client 拍板的事，如 approval / user question）
+ *     时 host mint。**绝不**在响应里 mint 新 id——「`rpcId` 配对」是异步
+ *     RPC 唯一正确的关联方式。
+ *   - **`RpcErrorDetailsMap` 是**与 `RpcMethodMap` 同构的第二张表**：加
+ *     一个 error code = 在这里加一行 + 在 `rpc.schema.ts` 加一个 branch
+ *     ——**两处都得改**才能编译通过。漏一处 = wire 上的错码**永不**带
+ *     详情。
+ *   - **`api/` contract layer 零 Node 依赖**——browser 可 import。
+ *   - **`RpcId` brand 是 zero-cost compile-time cast**——跟 `SessionId` 等
+ *     core brand 同惯例；不是 runtime 验证。
+ *
+ * 与其他模块的连接点：
+ *   - `@deepseek-ai/dsh-brand` 提供 `Branded<B>` 原始类型
+ *   - `@deepseek-ai/dsh-llm/brand` 的 `MessageId` / `@deepseek-ai/dsh-session/types`
+ *     的 `SessionId` 在 details map 里出现
+ *   - `rpc.schema.ts` 是 zod 形态
+ *   - `rpc-map.ts` 派生 `RequestPayload` / `ResponseValue` / `RpcMethodMap`
+ *   - 任何 host / client 端加新 endpoint 都得**先**扩 `RpcMethodMap` + 本文件
  */
 
 import type { z as zCore } from 'zod'

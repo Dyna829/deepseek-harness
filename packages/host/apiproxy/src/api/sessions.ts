@@ -1,7 +1,37 @@
 /**
- * sessions domain contract. Method signatures are the source of truth:
- * unary methods take the RpcRequest<P> narrow form and the impl echoes rpcId; everything
- * else references RequestPayload<'session.*'> / ResponseValue<'session.*'>.
+ * @file `sessions` domain 的 contract——「session 是 apiproxy 上最大
+ * domain」的 wire 协议层。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **Method signatures 是 source of truth**：unary 方法 `RpcRequest<P>`
+ *     narrow form 入参 + `rpcId` echo 出参；其它（payload / response）
+ *     都**派生**自 `RequestPayload<'session.*'>` / `ResponseValue<'session.*'>`
+ *     ——加方法只改 `rpc-map.ts` 派生，**不**手写签名。
+ *   - **`user-rpc` message source**：prompt 的 `rpcId` 透传进
+ *     `user/message` event，让 client 端能**对账**「乐观回显的临时
+ *     message」和「event 流里来的真 message」——`kind: 'user'` 保持
+ *     不变（model 面不背 transport 词汇），`rpcId` / 可选 `clientTimeZone`
+ *     是 durable JSON 字段。
+ *   - **`imageLimits` projection**：deployment 的 image-intake 上界——
+ *     attachment service 配置在 prompt admission 时强制；client 在
+ *     intake pre-check（计数 + 字节）并把上界画在 upload UI 上。
+ *     「key 缺席 = 没装 attachment service」——client 跳过 pre-check，
+ *     让 host 回答。
+ *   - **`sessionListMetadata.blank: false` 是单调的**：可以省一次 cold-log
+ *     probe；`blank: true` 只是「checkpoint prefix 无 `turn/start`」的事实，
+ *     **不**能据此隐藏 cold session——必须**直接**验证。
+ *   - **`api/` 纯类型**：`SessionProjectionMap` 走 `dsh-session-projection/types`
+ *     而不是包根——包根会通过 `dsh-agent` 带进 cordis `Context` merge，
+ *     污染 client 端类型聚合。
+ *
+ * 与其他模块的连接点：
+ *   - `@deepseek-ai/dsh-llm`（`MessageSource` map）/ `@deepseek-ai/dsh-session/types`
+ *     提供 brand
+ *   - `@deepseek-ai/dsh-session-projection/types` 的 `SessionProjectionMap` 选择位
+ *   - `events.ts` 的 `ToolEventView` 是 `HistoryEntry` 引用的视图
+ *   - `workspace.ts` 的 `WorkspaceId` 在 prompt 上下文里出现
+ *   - `rpc.ts` 的 `RpcRequest` / `RpcResponse` 是签名底
+ *   - `rpc-map.ts` 派生 `RequestPayload<'session.*'>` / `ResponseValue<'session.*'>`
  */
 
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'

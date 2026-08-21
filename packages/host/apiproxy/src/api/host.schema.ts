@@ -1,5 +1,30 @@
 /**
- * host domain zod schemas (names derived from map keys).
+ * @file `host` domain 的 zod schema。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **schema 名从 `rpc-map.ts` 派生**：`hostDescribe*` /
+ *     `hostPickDirectory*` / `hostListDirectory*` / `hostCreateDirectory*` /
+ *     `hostOpenPath*` 机械对应。加 method 时三处都得改。
+ *   - **`pickDirectory.path: z.string().nullable()`**：null 是「用户
+ *     取消 picker」的**正常**语义（**不**是错误），走「OK + path: null」
+ *     而不是「error」——区分「picker 没成功」vs「用户在 picker 上按
+ *     Cancel」是**显式** wire 语义。
+ *   - **`describe.attachedSessions: z.number().int().nonnegative()`**：
+ *     整数 ≥ 0；负数 / 浮点 → `bad-request`。
+ *   - **`describe.provider / model: optional`**：host 配置**没**有
+ *     explicit default 时**不**返（让 adapter 内部 fallback）——schema
+ *     端**不**「永远返一个」骗 UI。
+ *   - **`describe.canOpenPath: z.boolean()`**：直返 host capability
+ *     探测结果；**不**是「client 自己去试一次」——前者早知道，避免
+ *     「UI 上能点但点了 401」的反信号。
+ *
+ * 与其他模块的连接点：
+ *   - `rpc-map.ts` 的 `RequestPayload` / `ResponseValue`
+ *   - `rpc.schema.ts` 的 `Wire` envelope
+ *   - `host.ts` 是 type-only 入口
+ *   - `native-path-opener.ts` 提供 `canOpenPath` 探测
+ *   - `host/directory-picker-native` / `-browse` / `-auto` 提供 picker 实现
+ *   - `api-proxy.ts` 验 + 翻译
  */
 
 import { z } from 'zod'

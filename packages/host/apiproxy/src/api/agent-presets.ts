@@ -1,6 +1,37 @@
 /**
- * agent-presets domain contract: the roster a browser offers when starting a
- * session, plus the authoring calls behind it.
+ * @file `agent-presets` domain contract——浏览器「开 session 时选哪个
+ * preset」名单 + 它的 authoring calls。
+ *
+ * 关键设计点（**写代码容易绕过的**）：
+ *   - **`list` 是普通 method**（带 ids + trust）；**`read` / `select` /
+ *     `copy` / `openDocument` / `remove` 是 privileged loopback-pinned**：
+ *     composition 决定了 session 跑哪些 plugin——读它就是 reconnaissance，
+ *     所以 wire 必须把这条**明确**标「privileged」让 audit / 信任锚能识别。
+ *   - **`copy` 是唯一**写** authoring**：wire 上**不**传 composition
+ *     文本 / 路径——`from` 和 `agentPreset` 都是 id，host 端在自己的
+ *     root 里解析。copy 出来的 preset **和** source **完全一样可 load**，
+ *     不会让 wire 端注入新内容。description 跟 source 走（作者之后
+ *     自己改文件），name 不跟——name 是「行区分」的字段。
+ *   - **`select` 只在 session blank 时**允许：一旦 turn 跑过，历史
+ *     就是在旧 preset 的 tools 下生成的，换 preset 会留下「logged tool
+ *     call 但新 composition 不能 make」的残局——attempt 答 `agent-preset-locked`。
+ *   - **`openDocument` 传 id 不传 path**：host 端在自己 root 解析，wire
+ *     payload **不**能选任意 fs 目标。`hasDocument: false` 的 deployment
+ *     **不**报错——返 `{ opened: false, path }` 让 surface 拿路径**当
+ *     文本显示**。Shipped preset 拒（用户不该管装货）。
+ *   - **`broken` 字段让 preset 留名单**：「目录还占着 id」所以 surface
+ *     **必须**能 show + delete 它。`broken` 描述「为什么不能 compose
+ *     session」——offering 它只会把这条 reason 推迟到 session start 失败。
+ *   - **`trust: 'user'`**的 preset **和**它命名的 plugin **同** privilege
+ *     ——surface 不能把它「当成 vetted 的」展示。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-session` 的 `SessionId`
+ *   - `dsh-agent-presets` 提供 host 端 roster / authoring 实际逻辑
+ *   - `rpc.ts` / `rpc-map.ts` 提供 wire 协议
+ *   - `api-proxy.ts` 翻译 wire 到 host 服务
+ *   - `host/directory-picker-native` 提供 `openDocument` 背后的 native opener
+ */
  *
  * `list` is ordinary: it carries ids and trust, and every preset picker needs
  * it. The authoring calls are privileged and loopback-pinned — a composition

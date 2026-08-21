@@ -1,8 +1,38 @@
 /**
- * workspace domain contract. Wire projection of the host-side workspace
- * entity (@deepseek-ai/dsh-workspace): a stable id over a directory path,
- * a display title, and the ordered session account. Method signatures are the
- * source of truth, same as the sessions domain.
+ * @file `workspace` domain contract——host 端 `dsh-workspace` 实体的 wire
+ * 投影。
+ *
+ * 关键设计点（**写代码容易绕过的**）：
+ *   - **`WorkspaceId` brand 在本文件**重新声明，**不**从 `dsh-workspace`
+ *     导入：`api/` 必须保持「browser-importable + 零 host-package 依赖」；
+ *     brand 字符串一致所以两侧**结构上**同意（运行时无校验，brand 是
+ *     nominal typing 工具）。
+ *   - **`create` 不 mkdir**：传一个**已存在**目录的 path（`workspace-invalid-path`
+ *     失败如果缺 / 不是目录）。同 path 已被另一 workspace 拥有 → 返
+ *     那个 workspace + `created: false`（**幂等**）。允许 basename 同名
+ *     但 canonical path 不同——basename 默认 title 在 registry 里。
+ *   - **`rename` 改 current title = no-op success，不写 durable**：
+ *     避免「rename A → A」产生一条无意义的 updatedAt 戳。
+ *   - **`delete` 只删 registration，**不**删目录 / 文件 / session log**：
+ *     Sessions 变成「ungrouped」但**完整**保留——archive 不会让用户掉数据。
+ *   - **`sessionIds` 是「manual 顺序」**：attach prepend、`insertSessionBefore`
+ *     reorder；**activity 不 reorder**——「最近 active」**不**是 `sessionIds`
+ *     顺序的依据，UI 想加「recent」自己另算。
+ *   - **`archiveSession` 是 idempotent**：archived 列表里已有该 id → 静
+ *     默成功；`session-not-found` 只在「既不 live 又不在 persistence」时
+ *     报。Archive session 仍占 `sessionIds` 槽位（unarchive 时原位还
+ *     回去）。
+ *   - **`list` 返 `archivedSessionIds`**：让 client 不用为 reconnect 单
+ *     发一个 `host/archived-sessions-changed` 拉取——`workspace.list`
+ *     是权威的 registry 全量视图。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-session` 的 `SessionId` brand
+ *   - `dsh-brand` 的 `Branded<B>` 原始类型
+ *   - `rpc.ts` / `rpc-map.ts` 提供 wire 协议
+ *   - `dsh-workspace` 提供 host 端实现（`workspaceDomainState` / `workspaceRecord`）
+ *   - `api-proxy.ts` 把 wire 调用翻译给 host 服务
+ *   - `events.ts` 的 `host/archived-sessions-changed` 帧由本 domain 触发
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'

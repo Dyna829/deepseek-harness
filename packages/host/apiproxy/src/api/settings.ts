@@ -1,9 +1,34 @@
 /**
- * settings domain contract: the web face of the user-settings seam
- * (`ctx.settings`). Every payload that leaves this domain is redacted by the
- * seam (`describe({ redactSecrets: true })` semantics): `role('secret')`
- * fields never ride a response in any layer, and the `secrets` slot list is
- * how a form learns a write-only field exists and whether it is configured.
+ * @file `settings` domain contract——`ctx.settings` 的 web 出口。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **「所有 wire payload 走 `describe({ redactSecrets: true })`」**：
+ *     `role('secret')` 字段**任何**层**永远不**进 response。`secrets`
+ *     slot list 让 form 知道「有 write-only 字段存在 + 它是否 configured」，
+ *     **不**让 form 读出值本身。
+ *   - **`expectedRevision` 是 CAS 防 stale editor**：client 写时把上次
+ *     拿到的 `revision` 带回；host 端校验「这一份 view 之后没被改过」
+ *     ——stale 静默覆盖并发修改被拒。
+ *   - **`update` (merge) vs `replace` (wholesale) vs `mutate` (path ops)**：
+ *     三种 write 路径**不能**互相替代：
+ *     - `update` 走 patch merge，**没**列在 patch 里的 key 保留；
+ *     - `replace` **完全**覆盖——「`section: {}`」= 回到 composition
+ *       defaults；secret 也包括（client 必须**先**读回 user 层再回填
+ *       想保留的 secret，否则被一并清掉）；
+ *     - `mutate` 用 path ops 改——**不**针对「wire 上看不见的 secret」
+ *       做删除，**只**删 wire 上能命名的字段。这条让「删 secret」必须
+ *       走 `replace` + 显式重写。
+ *   - **`openDocument` 不传 path**：host 端自己解析**那一个** file-backed
+ *     provider 的本地 document。**不**让 browser payload 选任意 host fs 目标。
+ *   - **`applies: 'live' | 'restart'`**：client 用它决定「改完要不要
+ *     提示用户重启」——plugin owner 自己声明。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-settings` 提供 host 端 seam / schemastery schema 序列化
+ *   - `dsh-credentials` 提供 secret 值的存储（host 端）
+ *   - `dsh-schemastery` 提供 schema 序列化 / 反序列化
+ *   - `rpc.ts` / `rpc-map.ts` 提供 wire 协议
+ *   - `api-proxy.ts` 翻译
  */
 
 import type { RpcRequest, RpcResponse } from './rpc.ts'

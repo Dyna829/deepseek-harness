@@ -1,6 +1,34 @@
 /**
- * goals domain contract. Method signatures are the source of truth:
- * unary methods take the RpcRequest<P> narrow form and the impl echoes rpcId.
+ * @file `goals` domain contract——只暴露**写**接口，读走 session projection。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **「Mutations only」**：**没有** `goal.get` / **没有** wire goal view。
+ *     读走 `goal` session projection（history tail 的 `SessionProjectionsBlock`
+ *     + mux stream 里的 `session/projection` frame）。mutations 的 response
+ *     只 ack「新的 CAS ref」——**不**喂 client 状态（committed `goal/change`
+ *     event 通过 mux stream 走「同样的整份值」到所有 client）。
+ *   - **「CAS-guarded」**：`GoalRef` 是 `{ id, revision }` 元组——每次写
+ *     都传 client 持有的「上一次拿到的 revision」，host 端校验**只有**当
+ *     当前 revision 跟传的对得上才接受。**不**让 client「我不管你版本
+ *     多少了直接写」——`agent-busy`（subagent 路径）/ revision-mismatch
+ *     错误让 client 知道「你看到的版本已经旧了，refresh」。
+ *   - **「Subagent 路径拒」**：session-backed subagent 的 Agent 拒
+ *     `agent-busy`——goal 是**顶层**会话概念，subagent **不**有 goal。
+ *   - **「`clear` 留 tombstone」**：清掉当前 goal 但**留** durable tombstone
+ *     + history——未来 session 复活时仍能看到「曾经有过这个 goal 已被
+ *     clear」的事实。
+ *   - **「`edit` 不改 phase」**：objective / `maxGoalRounds` 可改，但 goal
+ *     处于 pause / complete / 等状态**不**被 `edit` 翻转；翻转走 `pause`
+ *     / `resume` / `complete`。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-session-projection` 的 `goal` projection key（读路径）
+ *   - `dsh-session` 的 `SessionId`
+ *   - `dsh-goal` 提供 host 端 CAS 实现 / `GoalError` 错误域
+ *   - `dsh-agent` / `dsh-subagent` 提供「session 是 subagent」判定
+ *   - `rpc.ts` / `rpc-map.ts` 提供 wire 协议
+ *   - `mux` stream 的 `session/projection` frame 广播 goal state
+ */
  *
  * Mutations only: the read side is the 'goal' session projection (history
  * tail-page projections block + session/projection frames), so there is no

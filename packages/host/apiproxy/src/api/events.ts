@@ -1,9 +1,33 @@
 /**
- * events domain contract: signatures and frame unions for the two logical
- * streams. Four-quadrant: streams yield the narrow form `RpcRequest<Frame>` (server-request
- * view) — rpcId must be exposed to the business layer, because responses to answerable frames
- * (approval/question requested) echo it; for pure pushes it identifies that one push.
- * signal is a local stream-control parameter, independent of the request (never on the wire).
+ * @file `events` domain contract——两条 logical stream（mux + host frame）
+ * 的签名 + frame union。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **「Streams yield `RpcRequest<Frame>` (server-request view)」**：四条
+ *     stream 走**同一**的「narrow server-request」形态，`rpcId` **必须**
+ *     暴露到 business 层——answerable frame（approval / question）响应
+ *     必 echo `rpcId`；纯 push（`agent-preset/selected` 之类）也**用**
+ *     `rpcId` 当「本条 push 的 id」。「stream frame 没有 rpcId」是反模式。
+ *   - **`signal` 是 local stream-control**，**不**是 wire 字段：client
+ *     自己 cancel stream 走 signal，**不**是 RPC payload。
+ *   - **`ToolEventView` 是「host-computed render intent」**：emission 时
+ *     调 presenter 算 view，**不**持久化（session log 只存 event）——同一
+ *     event 在**不同** delivery 时**可以**挂不同 view（甚至**没有**），
+ *     取决于当时哪份 presenter 在场。`for` 字段命名「哪类 view 在用」，
+ *     client **不**用重检 event type。absent = 走 documented default（generic
+ *     JSON card）。
+ *   - **`ToolCallView` / `ToolResultView` 在本文件 re-export `dsh-tools/presentation`**
+ *     ——**不**在 apiproxy 自己定义 render intent 词表（`dsh-tools` 是 owner）；
+ *     client 端拿到的就是「host 的 render intent 决定用哪份」，view 词的
+ *     真相**只**在 `dsh-tools`。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-tools/presentation` 提供 `ToolCallView` / `ToolResultView`
+ *   - `dsh-session` / `dsh-llm` 提供 brand / event 类型
+ *   - `dsh-user-approval` / `dsh-user-questions` 提供 approval / question 类型
+ *   - `dsh-jobs` / `dsh-workspace` 提供 job / workspace view
+ *   - `rpc.ts` / `rpc-map.ts` 提供 wire 协议
+ *   - `api-proxy.ts` 是 host 端实现
  */
 
 import type { AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions/types'

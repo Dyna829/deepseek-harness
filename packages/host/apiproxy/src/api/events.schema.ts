@@ -1,7 +1,34 @@
 /**
- * events domain zod schemas: MuxFrame / HostFrame unions (discriminatedUnion('type')).
- * A frame is the payload slot of the ServerRequest full form; the SessionEvent inside
- * a session/event frame reuses sessions.schema's strict-envelope + wide-data passthrough branch.
+ * @file `events` domain 的 zod schema——`MuxFrame` / `HostFrame` 两条
+ * server-stream union。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **`discriminatedUnion('type', ...)`**：每条 frame 在 wire 上是 tagged
+ *     union；未知 `type` 直接 reject（**不**是 silently generic render）。
+ *   - **`session/event` frame 复用 `sessions.schema.ts` 的 `sessionEventSchema`**
+ *     ——strict envelope + wide data passthrough 模式，**不**在 events
+ *     schema 重新定义一份。
+ *   - **`question/requested` `questions.min(1)`**：wire contract 上**强
+ *     制**至少 1 个问题——`dsh-user-questions` 的 `ask()` 已经在 host 端
+ *     拒空 batch（`EMPTY_QUESTIONS`），所以**空**的 frame 是 host 端
+ *     损坏，**必须**在这里 fail loud，**不**让它到 composer。
+ *   - **`session/projection.value` / `host/remote-event.args` 是 `z.unknown()`**：
+ *     值已经在它**自己** unit 的 schema 里验过；在这里**再**深验意味着
+ *     carrier schema import 全部 domain schema。这条**故意**保持 wide
+ *     ——host 端在 forward 之前**已经**验过 JSON-safety。
+ *   - **`askUserQuestionItem.intent` 是 `discriminatedUnion('kind', ...)`**：
+ *     presentation intent 在 wire 上 tagged union；未知 `kind` 直接
+ *     reject frame。
+ *
+ * 与其他模块的连接点：
+ *   - `rpc.schema.ts` 提供 `rpcErrorSchema` / `rpcIdSchema`
+ *   - `sessions.schema.ts` 复用 `sessionEventSchema` / `sessionIdSchema` /
+ *     `messageIdSchema` / `contentBlockSchema` / `toolEventViewSchema`
+ *   - `approvals.schema.ts` 提供 `approvalRequestIdSchema`
+ *   - `jobs.schema.ts` 提供 `taskViewSchema`
+ *   - `workspace.schema.ts` 提供 `workspaceViewSchema` / `workspaceIdSchema`
+ *   - `events.ts` 是 type-only 入口
+ *   - `api-proxy.ts` / `fetch/handler.ts` 验
  */
 
 import { z } from 'zod'

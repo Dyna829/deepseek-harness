@@ -1,6 +1,26 @@
 /**
- * tasks domain zod schemas: the branded job id and the wire view carried by
- * `session/jobs` frames.
+ * @file `jobs` domain 的 zod schema——branded `JobId` + `session/jobs`
+ * frame 的 wire view。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **`taskIdSchema` 是本域唯一 `JobId` brand cast**：同 DAG 惯例，
+ *     **不**自己 `as JobId` 一份。
+ *   - **`kind: z.string().min(1)`（**不**是 union）**：producer plugin
+ *     通过 declaration merging 扩展 kind map——closed set 在 wire 边界
+ *     **不可知**。schema 端**只**验「非空字符串」，不断 unknown kind。
+ *   - **`status` 是 closed union 5 个 literal**：状态机是封闭的——client
+ *     端可以 safe 渲染 icon / color。
+ *   - **`startedAt` / `finishedAt` 强 `int().nonnegative()`**：epoch ms
+ *     是非负整数；负数 / 浮点 → `bad-request`。
+ *   - **`finishedAt` optional**：live job 还**没**结束，**不**能假装有
+ *     结束时间。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-jobs/brand` 的 `JobId`
+ *   - `rpc.schema.ts` 的 `Wire` envelope
+ *   - `jobs.ts` 是 type-only 入口
+ *   - `events.ts` 的 `session/jobs` frame 引用本 schema
+ *   - `api-proxy.ts` 验 + 翻译
  */
 
 import { z } from 'zod'

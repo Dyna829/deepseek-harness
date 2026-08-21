@@ -1,9 +1,38 @@
 /**
- * Server side of the fetch carrier: maps an ApiProxy onto a pure
- * WHATWG Request->Response function. Two-level parse: full form (type/rpcId/method +
- * path==method) -> payload dispatched per method. HTTP status expresses only the carrier
- * (404 unknown path / 415 non-JSON media type / 400 non-JSON body / 500 handler crash);
- * business errors are always 200 + ServerResponse.
+ * @file fetch carrier 的 server 端——把 `ApiProxy` 翻成纯
+ * `Request -> Response` 函数。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **Two-level parse**：**第一**次 parse `clientRequestSchema`（type /
+ *     rpcId / method / `path === method`），routing via `method` → **第二**
+ *     次 parse `result.value` 用各 domain 的具体 schema。两段失败给
+ *     **不同**错（envelope 坏 → `bad-request`；payload 坏 → 业务错）。
+ *   - **HTTP 状态码只表达「carrier 错」**：
+ *     - 404 = unknown path
+ *     - 415 = non-JSON media type
+ *     - 400 = non-JSON body
+ *     - 500 = handler crash
+ *     **业务错**永远 200 + `ServerResponse`——`ok: false` 用 `code` 字段
+ *     路由，**不**用 HTTP 状态码。HTTP 状态码语义跟业务解耦，**让**
+ *     `fetch/handler.ts` 单纯当「wire 翻译」`不`做「业务路由」。
+ *   - **`UnaryRoutes` 是 `[K in keyof RpcMethodMap]: ...` 派生**：
+ *     map 加一行 / 改一行没 route row 编译失败；schema 贴错 method
+ *     （type error 不是 runtime surprise）；schema 用 `Wire<...>` 宽
+ *     化挂钩 `exactOptionalPropertyTypes`。
+ *   - **「Every invoke 收 carrier Request 的 signal」**：method 签名
+ *     里有 `signal: AbortSignal` 的 forward 它，没的忽略——abort 链
+ *     caller disconnect / timeout → handler → impl 一路传到。
+ *
+ * 与其他模块的连接点：
+ *   - `api/index.ts` 的 `ApiProxy` / `MuxFrame` / `HostFrame`
+ *   - `api/rpc-map.ts` 的 `RequestPayload` / `ResponseValue` / `RpcMethodMap`
+ *   - `api/rpc.ts` 的 four-quadrant 形态
+ *   - `api/rpc.schema.ts` 的 `clientRequestSchema` / `clientResponseSchema` /
+ *     `Wire<T>`
+ *   - 各 `api/*.schema.ts` 的 method-specific request schema
+ *   - `api/downloads.schema.ts` 的 `sessionLogQuerySchema`（GET 路径）
+ *   - `host/webserver` 是典型 mount 点
+ */
  */
 
 import { randomUUID } from 'node:crypto'

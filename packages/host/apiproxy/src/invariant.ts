@@ -1,6 +1,14 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-host-apiproxy`.
- * @module @deepseek-ai/dsh-host-apiproxy/invariant
+ * @file `dsh-host-apiproxy` 的 invariant companion 入口。
+ *
+ * 本包是「wire contract + host-side gateway over services owned elsewhere」
+ * ——**不**自己 emit cordis events；它投影的 session / agent event 流由
+ * 各自 owner 包的 companion 验。`rpcId` round-trip + schema acceptance
+ * 在 carrier 边界 (`fetch/handler.ts` / `fetch/client.ts`) 守，protocol-
+ * isomorphism 测试套件覆盖。
+ *
+ * `install` 留作未来挂「`api/index.ts` barrel 必须**包括**新 domain」之类
+ * 装配期不变量时的占位。
  */
 
 /* jscpd:ignore-start */

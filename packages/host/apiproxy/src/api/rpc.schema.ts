@@ -1,8 +1,38 @@
 /**
- * Message-layer zod schemas: the four wire full forms + error body +
- * carrier receipt. The payload slot is unknown in the full-form schemas — business payloads
- * get a second parse dispatched by method (two-level parse discipline).
- * Brand cast point: rpcIdSchema, and only there.
+ * @file `rpc` message-layer 的 zod schema——四个 wire full form + error body
+ * + carrier receipt。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **「Two-level parse discipline」**：full-form schema 的 `payload`
+ *     槽是 `z.unknown()`——business payload **不**在这里 parse。**第一**
+ *     次 parse envelope（rpcId / result 形态）→ routing via `method` →
+ *     **第二**次 parse `result.value` 走各 domain 的具体 schema。两
+ *     段失败给**不同**错（envelope 坏 → `bad-request`；payload 坏 →
+ *     业务错 + host 端可重发让 client 重答）。
+ *   - **`Wire<T>` 类型 widen**：`exactOptionalPropertyTypes` 开 + zod
+ *     `.optional()` 输出 `T | undefined`——`satisfies z.ZodType<T>` 直
+ *     接挂钩会**编译失败**。`Wire<T>` 把每个 property deep widen 成
+ *     `T | undefined`：「absent」和「value undefined」wire JSON 上是
+ *     **同一**（`JSON.stringify` 不写 `undefined`）——**没**丢任何
+ *     验证语义。
+ *   - **`rpcIdSchema` 是 `z.string()`**（**不** min(1)）：id 是**不透
+ *     明** echo token，handler 在 id 不可读时**替**一个 sentinel——
+ *     拒 client 端的 id 只是把「可关联 error 报告」变成「client 端
+ *     parse 失败」。
+ *   - **`rpcErrorSchema` 是 `discriminatedUnion('code', ...)`**：加一个
+ *     code = 在 union 加一项 + 在 `rpc.ts` 的 `RpcErrorDetailsMap` 加
+ *     一行——两处都得改，**不**会让 details 类型**不一致**。
+ *   - **`details: z.object(...)` 都是 required（**不**可选）**：error
+ *     response 永远**有** machine-readable 详情（**不**留空 `{}`）——
+ *     client 端可以**总是**拿 details 做路由/重试/UI。
+ *
+ * 与其他模块的连接点：
+ *   - `rpc.ts` 的 `ClientRequest` / `ClientResponse` / `ServerRequest` /
+ *     `ServerResponse` / `RpcError` / `RpcId` / `RpcReceipt` 是 type-only 入口
+ *   - `rpc-map.ts` 派生 `RequestPayload` / `ResponseValue`
+ *   - 任何 `*.schema.ts` 的 `Wire<...>` 都用本文件
+ *   - `fetch/handler.ts` / `fetch/client.ts` 走本 schema 验 envelope
+ *   - `api-proxy.ts` 走 `rpcErrorSchema` 形态构造 error response
  */
 
 import { z } from 'zod'

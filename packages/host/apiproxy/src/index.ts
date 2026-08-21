@@ -1,5 +1,39 @@
 /**
- * @deepseek-ai/dsh-host-apiproxy — the API gateway every client shape shares:
+ * @file `dsh-host-apiproxy`：每个 client shape 共享的 API gateway。
+ *
+ * 三个子层：
+ *   1. **`api/`**（types + zod schemas）—— browser-safe 的 `ApiProxy` 契约。
+ *      Host 端和 client 端都 import 同一份，所以「host 能调什么 / client
+ *      能调什么」是**同一份**静态清单。
+ *   2. **`fetch/`** —— transport：host 侧 `toFetchHandler`（把 `ctx.apiProxy`
+ *      包成 web fetch 形态），client 侧 `AbstractApiClient` + 平台子类。
+ *   3. **`api-proxy.ts`**（`createApiProxy` + `ApiProxyService`）—— host 端
+ *      实现，挂在 `ctx.apiProxy` 上。
+ *
+ * 关键设计：
+ *   - **transport-agnostic**：本包**不**注册路由，**不**开 socket——
+ *     物理 carrier（webserver / ACP / in-process）自己包 `ctx.apiProxy`。
+ *     这是「同一个 `ApiProxy` 既能走 HTTP fetch 又能走 in-process」的根。
+ *   - **`ctx.agentDefaultModel` 是 default 模型的真相**：换 model 走那个
+ *     service 的持久化；已写进 session log 的 selection **不**被改。
+ *   - **`Config` 三件事**：`nativeOpen`（能不能用桌面 opener）/ session log
+ *     ZIP 压缩级别 / cold session blankness probe 大小上界。**没有** settings
+ *     之外的可调参数——刻意把面缩窄，让 misuse 概率小。
+ *   - **`respond` 用 `bind(api)`**：`createApiProxy` 返回**纯闭包**（不
+ *     抓 `this`），bind 行为上**没**差，但保留显式 bind 让 transport
+ *     作者知道「这是从 service 边界**剥离**出来的函数」，不会被
+ *     「`this` 已变」之类的 JS 边界问题坑。
+ *
+ * 与其他模块的连接点：
+ *   - `ctx.agents` / `ctx.sessions` / `ctx.llm` / `ctx.workspaceRegistry` /
+ *     `ctx.tools` / `ctx.userQuestions` / `ctx.attachments` /
+ *     `ctx.directoryPicker` / `ctx.subagents` / `ctx.sessionQuery` /
+ *     `ctx.agentDefaultModel` 全部 inject 进 `ApiProxyService`——每条 RPC
+ *     都在某个 Service 边界上做校验
+ *   - `host/webserver` / `host/directory-picker-*` / `host/frontend-static`
+ *     等都是 `ctx.apiProxy` 的 carrier
+ *   - `api/remotes` 是 client 端的 Remote 装配
+ */
  * the ApiProxy contract (api/: types + zod schemas, browser-safe), the fetch
  * carrier pair (fetch/: toFetchHandler on the host side, AbstractApiClient +
  * platform subclasses on the client side), and the host-side implementation

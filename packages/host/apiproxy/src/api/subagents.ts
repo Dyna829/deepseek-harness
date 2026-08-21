@@ -1,7 +1,31 @@
 /**
- * Browser-safe subagent domain contract. Persisted transcript reads never
- * activate an Agent, while continuable prompts route through the exact live
- * direct parent into the child's Agent inbox.
+ * @file browser-safe 的 `subagents` domain contract。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **「持久化 transcript 读 = 不激活 Agent」**：`subagent.history` 是
+ *     只读拉取，**不**会顺手把 subagent Agent 拉起来——读历史是「无
+ *     副作用」的纯 IO。
+ *   - **「Continuable prompt 走**精确** live direct parent」**：
+ *     `subagent.prompt` 通过**那一个** live direct parent 的 inbox
+ *     路由给 child Agent——**不**走 `createAgent` 路径（那是新建），
+ *     **不**走通用 `session.prompt` 路径（那是顶层）。这条精确路由
+ *     让「continuable」语义在 wire 上守得住。
+ *   - **`SubagentListEntry` 是 discriminated union**：
+ *     - `kind: 'child'` 必带 `mode: 'one-shot' | 'continuable'`；前者的
+ *       `label` 可缺，后者的 `label` 必填（continuable 必有可让用户重新
+ *       接入的标题）；
+ *     - `kind: 'diagnostic'` 是 corrupt / unsupported / unavailable 状态
+ *       下的占位行——可被列但**不**可被 prompt / interrupt。
+ *   - **`SubagentAddress` 是 client 端 subagent transport 的 selector**：
+ *     client 看 `address` 决定「该走 subagent 路径」还是「走顶层 RPC」。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-session` / `dsh-llm` 的 `SessionId` / `MessageId` / `ContentBlock`
+ *   - `dsh-subagent` 提供 host 端 inbox / continuation 实现
+ *   - `dsh-agent` 的 live parent → child Agent inbox 路由
+ *   - `rpc.ts` / `rpc-map.ts` 提供 wire 协议
+ *   - `sessions.ts` 的 `HistoryEntry` / `SessionProjectionsBlock` 在 history 响应里
+ */
  */
 
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'

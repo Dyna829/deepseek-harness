@@ -1,6 +1,44 @@
 /**
- * Host-side ApiProxy implementation. Signature discipline: unary takes the
- * narrow RpcRequest<P> and echoes request.rpcId on the RpcResponse<T>.
+ * @file Host 端 `ApiProxy` 实现。
+ *
+ * 关键设计点（**写代码容易绕过的**）：
+ *   - **「unary 入参 = `RpcRequest<P>`，出参 = `RpcResponse<T>` 且
+ *     `rpcId === request.rpcId`」**：signature discipline 让 transport
+ *     层（fetch / in-process / ACP）可以无脑转发；client 拿 response 时
+ *     **靠 `rpcId` 配对**而不是按发送顺序。违反这条就把「异步 RPC」打
+ *     回「同步 call-stack」，乱序就被乱套。
+ *   - **「错误域 → wire 域」翻译集中在文件里**：每个 domain error
+ *     （`AttachmentError` / `SessionTitleInvalidError` /
+ *     `WorkspaceMoveInvalidError` / `GoalError` / `SubagentError` /
+ *     `UserQuestionError` / `DirectoryPickerError` / `ApiRemote*` …）
+ *     都在这一处翻成 `RpcError.code` + 可序列化 payload，**不让**它
+ *     透传到 client——那会让 client 端得依赖 host 服务。
+ *   - **`settings` / `credentials` 走 optional 注入**：`ctx.get(...)`
+ *     而不是 `inject`——缺这两个 service 的 composition 仍然 serve 其它
+ *     domain。brand guard（`credentialRef` / `settingsNamespace`）在
+ *     **wire 边界**集中验。
+ *   - **`dsh-cordis-host-runner/types` 是「client-safe 入口」**而不是
+ *     包根：包根会合并 `ctx.dynamicCordisRunner`，让 `apiproxy` 依赖
+ *     `api/remotes` 形成循环，**这条路径专门为解环**。
+ *   - **`approval/request` 是 side-effect type import**：`ctx.approval`
+ *     是 optional composition，**不**引值，只引类型——引值会让没装
+ *     approval seam 的 composition 加载失败。
+ *   - **Cold log 上界**：`COLD_SUMMARY_BATCH_SIZE` + `SESSION_SEARCH_*
+ *     上界` 都为「不让单个 RPC 把 host IO 跑炸」而设。`streamSessionLogZip`
+ *     的 `DEFAULT_COLD_BLANK_PROBE_MAX_BYTES` 是「不被恶意冷 session
+ *     artifact 拖到磁盘扫一遍」的兜底。
+ *
+ * 与其他模块的连接点（**最广**的注入面之一，几乎是 host 端 Service 的
+ * 总和）：
+ *   - `ctx.agentDefaultModel` 是默认模型真相
+ *   - `ctx.agents` / `ctx.sessions` / `ctx.llm` / `ctx.tools` /
+ *     `ctx.workspaceRegistry` / `ctx.attachments` / `ctx.directoryPicker` /
+ *     `ctx.subagents` / `ctx.sessionQuery` / `ctx.userQuestions` /
+ *     `ctx.approval` / `ctx.dynamicCordisRunner` / `ctx.sessionProjections` /
+ *     `ctx.sessionProjectionCache` / `ctx.tasks` / `ctx.skills` /
+ *     `ctx.credentials` / `ctx.settings` / `ctx.sessionTitle`
+ *   - 任何**新**的 Service 接入 `ApiProxy`，都在这里加 inject + 翻译
+ *     boundary 错误
  */
 
 import { randomUUID } from 'node:crypto'

@@ -1,6 +1,35 @@
 /**
- * Cross-platform native path and text-document openers used by the local GUI
- * carrier.
+ * @file 跨平台 native path / text-document opener——本地 GUI carrier 用。
+ *
+ * 关键设计点（**写代码容易绕过的**）：
+ *   - **「Default intent 优先 default browser（如果 platform 能名），
+ *     否则 default application」**：browser-renderable（`.html` /
+ *     `.htm` / `.xhtml` / `.svg`）走 browser；其它走 default app。WSL
+ *     把 path 翻给 Windows desktop（**不**假设 Linux GUI 在）。
+ *   - **「text-editor intent **永远不**看 browser」**：macOS 强制 text
+ *     editor；Linux/Windows 走 desktop file association。
+ *   - **`macBundleForHttps` 用 `defaults read com.apple.LaunchServices/...`**
+ *     拿默认 browser bundle——把 `LSHandlerPreferredVersions` 字典先
+ *     strip 掉（它自己带 `LSHandlerRoleAll`）——`open -b <bundle> <path>`
+ *     真的让该 browser 接管（**不**是 macOS 自己的 content-type 决定）。
+ *   - **`PathOpenerInternals` 是 testable seam**：`platform` /
+ *     `osRelease` / `env` / `run` 全部可注入——deterministic 测试
+ *     **不**依赖真实 OS / shell。
+ *   - **「Windows names no browser without registry read」**：本文件
+ *     **不**读 UserChoice registry，`.html` 关联就是普通 case 的
+ *     browser——在 Windows 段直接 `return false` 让 caller 走 default app。
+ *   - **`runNativeCommand` 来自 `dsh-native-command`**：native 路径
+ *     **永远不** invoke shell——这条不变量让 shell injection 在 opener
+ *     路径**不可能**。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-native-command` 提供 `runNativeCommand` + `NativeCommandRunner`
+ *   - `host/directory-picker-native` 共享同一 native command runner
+ *   - `api-proxy.ts` 的 `host.openPath` 调 `openNativePath`
+ *   - `api-proxy.ts` 的 `host.describe.canOpenPath` 调 `canOpenNativePath`
+ *   - `agent-presets` 的 `agentPreset.openDocument` 调 `openNativeTextFile`
+ *   - `settings` 的 `settings.openDocument` 调 `openNativeTextFile`
+ */
  *
  * The default intent prefers the default browser for documents it renders when
  * the platform can name one, then falls back to the default application. WSL

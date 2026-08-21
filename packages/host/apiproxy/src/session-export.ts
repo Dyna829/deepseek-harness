@@ -1,6 +1,38 @@
 /**
- * Host-side session-log download: streams one ZIP archive whose files are the
- * sessions' stored artifact text verbatim plus every referenced media object.
+ * @file Host 端 session-log 下载——流式产一个 ZIP。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **「File = backend 的 byte-identical 持久化」**：root artifact 用
+ *     原始 base name (`session.jsonl`)；subagent descendant 在
+ *     `subagents/<id>/<filename>`；image 在 `media/<attachmentId>.<ext>`
+ *     （content-addressed——**一个** archive 永不重复 shared image）。
+ *     **不**写 manifest——每条 file **自描述**（log 第一行是 header
+ *     line；media 是自己的 media type）。`session.search` / 第三方
+ *     import 工具**不**需要「先解 manifest 再解 content」。
+ *   - **「Live session flush barrier 先于 artifact 读」**：
+ *     `flushLiveSessionLog` 在 read 前调 `sessions.flush(session)`——
+ *     内存 log 落盘后才 export。cold session **没**在内存 work，
+ *     **不**调 barrier。
+ *   - **「Request abort + response-consumer cancel 共用一 signal」**：
+ *     同一 producer signal 中断「active compressor」——fflate 不会
+ *     写半截 chunk。
+ *   - **「fflate streaming Zip」**：host 端**永远不**持整 archive
+ *     buffer；consumer pull 慢时 production 等「64 KiB response queue
+ *     + 一次同步 fflate push」的上界，让慢 consumer 限 accumulation。
+ *   - **「Optional services」**：`sessionLogExportDeps` 把所有 4 个
+ *     service 用 `ctx.get()` 拿（**不**是 `inject`）——`sessionQuery` /
+ *     `sessionPersistence` / `attachments` 缺**任何**一个 → 500；live
+ *     `sessions` store 可缺（cold-only deployment）。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-attachment` 提供 image bytes + media type
+ *   - `dsh-session-query` 提供 `SessionLineageNode` / descendant 遍历
+ *   - `dsh-session` 提供 `SessionStore.flush`
+ *   - `dsh-session-persistence` 提供 `SessionRawArtifact` 读
+ *   - `fflate` 的 `Zip` / `ZipDeflate` 流式 API
+ *   - `downloads.ts` 的 `DownloadsApi['sessionLog']` 是入口 contract
+ *   - `api-proxy.ts` 调本文件 + `downloads.sessionLog` 拿 `Response`
+ */
  * The root artifact sits under its original base name (`session.jsonl`); each
  * subagent descendant under `subagents/<id>/<filename>`; each image referenced
  * by any included log under `media/<attachmentId>.<ext>` (content-addressed,

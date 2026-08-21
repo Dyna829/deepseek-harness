@@ -1,8 +1,38 @@
 /**
- * Client side of the fetch carrier. AbstractApiClient holds every protocol invariant: rpcId minting,
- * four-quadrant envelope wrap/unwrap, zod parsing, in-process SSE frame decoding, and the payload-direct
- * IApiClient domain methods (business code never mints). Platform differences ride two aspects:
- * abstract doFetch (transport) + overridable onEnvelope (tap). ApiProxy (the impl face) is untouched.
+ * @file fetch carrier 的 client 端——`AbstractApiClient` + 平台子类
+ * （web fetch / in-process）。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **`AbstractApiClient` 持有**所有**协议 invariant**：
+ *     `rpcId` minting、four-quadrant envelope 包 / 拆、zod parse、in-process
+ *     SSE frame 解码、`IApiClient` 的 payload-direct 域方法（**business
+ *     code 永远**不**自己 mint**）。`ApiProxy`（impl face）**不**动。
+ *   - **「Platform differences 走两个轴」**：
+ *     - `abstract doFetch(Request): Promise<Response>` —— transport
+ *     - `overridable onEnvelope(RpcMessage): void` —— envelope 观察器
+ *       （debug / telemetry / **envelope-level redaction**）
+ *   - **`IApiClient` 是 payload-direct view**：business code 写
+ *     `client.sessions.prompt(payload)`，**不**用「先 mint rpcId + 包
+ *     envelope」——`AbstractApiClient` 全做。
+ *   - **「Business 需要 `rpcId` 读 echo」**：`RpcResponse.rpcId` 是
+ *     异步 RPC 关联**唯一**方式，business code 不用手 mint。
+ *   - **「Stream 方法有 `onOpen` 钩子」**：物理 transport readable 之后、
+ *     第一条 frame 之前发——connection controller 拿它做「ready」
+ *     handshake。Generator lazy，**真**到 `iteration` 开始时 fetch
+ *     才发起，`onOpen` 才是真「on」。
+ *   - **`IApiClient` 派生自 `RpcMethodMap`**：map 加一行 → 这里
+ *     **机械**更新，编译期 fail 兜住「漏写 method」。
+ *
+ * 与其他模块的连接点：
+ *   - `api/index.ts` 的 `ApiProxy` / `MuxFrame` / `HostFrame`
+ *   - `api/rpc-map.ts` 的 `RequestPayload` / `ResponseValue` / `RpcMethodMap`
+ *   - `api/rpc.ts` 的 `ClientRequest` / `ClientResponse` / `RpcMessage` /
+ *     `RpcReceipt` / `ServerRequest` / `RpcRequest` / `RpcResponse`
+ *   - `api/rpc.schema.ts` 的 `serverRequestSchema` / `serverResponseSchema` /
+ *     `rpcReceiptSchema` / `Wire<T>`
+ *   - `api/events.schema.ts` 的 `muxFrameSchema` / `hostFrameSchema`
+ *   - 各 `api/*.schema.ts` 的 value schema（**第二**次 parse）
+ *   - 任何 web 端业务包都 import `IApiClient` 当业务 API 入口
  */
 
 import type { z } from 'zod'
