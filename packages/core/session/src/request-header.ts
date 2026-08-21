@@ -1,4 +1,21 @@
 /**
+ * @file 从 session log 重建「某次 LLM 请求的 header」。
+ *
+ * 背景：loop 每次发 LLM 请求前，会把「这次请求的关键配置（model、temperature、maxTokens、
+ * system prompt、tools…）」冻结成一个 `EpochHeader`，append 一条 `request/header` 事件。
+ * 之后从该事件起，直到下次 `request/header` 之前，所有 LLM 请求都用这个 header。
+ *
+ * 本文件工具：
+ *   - `canonicalHeader(h)`：把 header 规约成 canonical 形态（空 system 提示 / 空 tools 列表变成
+ *     「缺失」字段，和「请求实际构建时」一致）；
+ *   - `foldRequestHeader(events)`：从 log 倒着找最近一条 `request/header`，返回它的 canonical 形态；
+ *   - `headerEquals(a, b)`：判断两个 header 是否完全相同（避免无变化的 header 重复 append）。
+ *
+ * 用途：replay 的时候，「当时那个 LLM 请求」是「最近的 header + 当时的 messages」拼出来的，
+ * 所以 fold header 是 log 重建的核心工具。
+ */
+
+/**
  * Request-header reconstruction utilities over full `request/header` session
  * events. Anyone holding a session log reconstructs the {@link EpochHeader}
  * any request was built under by taking the latest canonical snapshot; the

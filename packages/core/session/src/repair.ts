@@ -1,4 +1,19 @@
 /**
+ * @file session log 的「崩溃恢复」修补器。
+ *
+ * 场景：进程在 turn 写到一半被杀。重新启动时加载 log，会发现「开了 turn 但 turn/end 缺」、
+ * 「tool/call 有但 tool/result 缺」之类的「尾巴破损」。
+ *
+ * 修复策略：**只补缺失的事件，不动已经写好的**。具体：
+ *   - 没配对的 tool/call：补一条 `isError: true` 的 `tool/result`，错误码 `TOOL_NOT_STARTED` 或
+ *     `TOOL_OUTCOME_UNKNOWN`；
+ *   - 开着的 step：补 `step/end`；
+ *   - 开着的 turn：补一个 `interrupted` 的 `turn/end`。
+ *
+ * 关键：时间戳用「最后一条真实事件」的 `time`，保证事件序列时间上连续、provider 能接受。
+ */
+
+/**
  * Crash-recovery repair for an interrupted session log. It preserves a fully
  * written final turn and supplies the missing tool, step, and turn boundaries
  * needed to resume with a provider-valid transcript.

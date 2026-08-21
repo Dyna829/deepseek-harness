@@ -1,4 +1,35 @@
 /**
+ * @file Session 服务：append-only 事件日志 + 内存中的 store + 派生的 LLM 消息历史。
+ *
+ * 这是 dsh 整个「**真相之源**」的所在地。
+ *
+ * 核心抽象：
+ *   - **Session**：一个不可变的事件流（事件源模式），每个事件都 frozen；
+ *   - **SessionStore**：进程内活跃 session 的注册表（`ctx.sessions`）；
+ *   - **Surface**：从事件日志派生的「模型可见的 LLM 消息序列」，
+ *     只看 `surfaceOp` 标记的特定事件类型；
+ *   - **持久化是插件职责**：自己不存盘，靠订阅 `session/event` + `session/flush` 拿到
+ *     事件流和刷新信号，由 `@deepseek-ai/dsh-session-persistence` 之类包负责落盘。
+ *
+ * 关键不变量：
+ *   - 日志只能 append，不能改、不能删（compact 是通过「替换 surface 段」实现的，不是删事件）；
+ *   - 派生消息 = `session.deriveMessages()`，**可重放**；
+ *   - `SESSION_FORMAT_VERSION` = 0，pre-release 期间：不兼容就拒，不做迁移。
+ *
+ * 文件拆分（仅 src/）：
+ *   - `index.ts`               — 服务入口，导出 `SessionStore`、各种 helper
+ *   - `types.ts`               — 全部事件类型 + header + branded SessionId
+ *   - `surface.ts`             — surface 折叠算法（决定 LLM 看到哪些消息）
+ *   - `json.ts`                — lossless JSON 工具
+ *   - `request-header.ts`      — LLM 请求的「epoch header」折叠
+ *   - `preparation.ts`         — 创建 session 的预发布校验
+ *   - `repair.ts`              — 已中断 turn 的修补（用于 resume）
+ *   - `chunk-rows.ts`          — 事件 → 持久化记录行 的打包
+ *   - `known-event-types.ts`   — 自动生成的「本仓库认识的事件类型」清单
+ *   - `invariant.ts`           — 关系型日志不变量
+ */
+
+/**
  * Event-sourced session service: append-only session log, in-memory store, and
  * the derived LLM message history. Persistence is a plugin concern (subscribe
  * to `session/event`, drain on `session/flush`).

@@ -18,6 +18,23 @@ import type { JsonValue } from './json.ts'
 // `ctx.sessions` (a Host-only SessionStore) into every consumer's program.
 export type { JsonValue } from './json.ts'
 
+/**
+ * @file Session 包的全部类型定义。
+ *
+ * 核心类型一览：
+ *   - `SessionId` / `SessionId(...)`：branded string，编译期区分普通字符串
+ *   - `SESSION_FORMAT_VERSION` = 0：on-disk 格式版本号，pre-release 阶段写 0、不做兼容
+ *   - `SessionHeader`：持久化的元数据（id、createdAt、cwd、parent、seedLength…）
+ *   - `SessionEvent`：单条 append-only 事件（含 type、seq、time、data、可选 surfaceOp、ignorable 等）
+ *   - `SessionEventMap`：`{ [type]: data }` 的映射，让 `SessionEvent<'turn/start'>` 能查 shape
+ *   - `SessionEventType`：所有已知事件 type 的字符串联合
+ *   - `SurfaceEventType` / `SurfaceOp`：surface 折叠机制的类型
+ *   - `TurnEndReason` / `EpochHeader` / `RequestContext`：turn 生命周期 + LLM 请求快照
+ *   - `LlmRequest` 等：组装一次 LLM 请求需要的全部事实
+ *
+ * 这里**不要**有运行时逻辑，纯类型 + 常量。
+ */
+
 /** Identifies one session in the store (and its persistence artifacts). */
 export type SessionId = Branded<'SessionId'>
 

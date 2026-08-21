@@ -1,3 +1,21 @@
+/**
+ * @file 持久化数据要用的「无损 JSON」工具。
+ *
+ * 核心定义 `JsonValue`：能 `JSON.stringify` 一次再 `JSON.parse` 一次**完全还原**的值。
+ * 排除项：
+ *   - `-0`（TypeScript number 类型没法区分，但实际不同）
+ *   - 带额外自有属性的 array（JSON 会丢）
+ *   - 非普通对象（Date、Map、Set、class instance 等）
+ *   - NaN / Infinity
+ *
+ * 工具：
+ *   - `isJsonValue(v)`：运行时校验
+ *   - `snapshotJsonValue(v)`：深拷贝并校验后返回一个**detached**（和原值完全断开引用）
+ *     的副本，避免后续修改污染已经被持久化的数据
+ *
+ * 用在哪：tool 的 `meta`、snapshot 字段等「必须能重放字节级一致」的数据。
+ */
+
 /** Lossless-JSON validation and detached snapshots for durable session data. @module @deepseek-ai/dsh-session/json */
 
 /**

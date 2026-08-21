@@ -1,4 +1,22 @@
 /**
+ * @file LLM streaming chunk 的**存储层**打包。
+ *
+ * 背景：模型 streaming 时一次响应会有几百个 `assistant/chunk` 事件（每个 delta 一次），
+ * 每个事件都有 JSON envelope（type、seq、time），实际内容只有几十字节。算下来 envelope
+ * 比内容大 56 倍（DeepSeek 实测）。直接存 JSONL 太浪费。
+ *
+ * 做法：把「连续同类型」的 chunk 打包成一行存储记录（`text-chunks` / `reasoning-chunks` /
+ * `tool-call-chunks`），读时再展开成原来的 events —— **字节级一致**。
+ *
+ * 严格边界：
+ *   - 这些「存储行」是**持久化层编码词汇**，**不是** session 事件，**不**进 `Session.events`，
+ *     也没有 `SessionEventMap` 成员；
+ *   - 用「无斜杠」的裸 type 标签（如 `text-chunks`），跟事件命名空间（都是 `xxx/yyy`）区分开；
+ *   - 编码器**只**识别白名单形态，不认识的字段原样存 —— 失去压缩不丢数据；
+ *   - 解码器**先**校验、再展开，坏的行直接 fail 不静默丢整批。
+ */
+
+/**
  * Lossless storage packing for `assistant/chunk` delta runs. Providers stream
  * token-sized deltas, so a log stores hundreds of near-identical event lines
  * whose JSON envelopes dwarf their payloads (~56× measured on a real DeepSeek

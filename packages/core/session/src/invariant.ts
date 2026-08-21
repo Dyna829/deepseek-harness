@@ -1,4 +1,19 @@
 /**
+ * @file session 包自带的 invariant：检查 session 事件日志的**关系型**不变量。
+ *
+ * 检查的「关系」包括：
+ *   - `seq` 单调递增；
+ *   - `turn/start` 和 `turn/end` 严格成对；
+ *   - `step/start` 和 `step/end` 严格成对；
+ *   - 同一 turn 内 step 序号连续；
+ *   - `tool/call` 和 `tool/result` 严格成对；
+ *   - 已开 turn 中断时的合理修补（来自 `repair.ts`）。
+ *
+ * 加载方式：把本 companion 跟 `@deepseek-ai/dsh-invariants` 服务一起挂载。
+ * 这些检查是「日志自洽」的兜底，研发期发现问题，不影响主流程。
+ */
+
+/**
  * Package-owned relational invariants for the session event log. Load this
  * companion beside `@deepseek-ai/dsh-invariants` to enable the checks.
  *

@@ -1,4 +1,24 @@
 /**
+ * @file Surface 层：session 事件日志的「投影视图」。
+ *
+ * 核心概念：
+ *   - **Append-only 日志是真相之源**（任何人想看真实发生了什么，看日志）；
+ *   - **Surface 是 LLM 看到的消息序列**，从日志按特定规则「投影」出来；
+ *   - 投影规则：只挑 `user/message` / `assistant/message` / `tool/result` 三类，
+ *     并且带 `surfaceOp` 标记的；
+ *   - `surfaceOp` 有两种：
+ *     - `'append'`：追加到 surface 末尾
+ *     - `'replace'`：替换 surface 上某段（**不**改原日志，只换视图）
+ *
+ * 重要区分（`isAppendSurfaceEvent` 的 docstring 说清楚了）：
+ *   - LLM 看到的：append + replace 一起看（replace 段会 shadow 之前的消息）
+ *   - 人类 transcript：只 append（这样用户已经看过的对话不会被 replace 抹掉）
+ *
+ * **Browser-safe**：web 客户端通过 subpath import 这个文件，所以**不能**用 `node:` 引入
+ * （会让 vite bundle 直接挂掉）。
+ */
+
+/**
  * Surface layer on top of the session event log: an ordered view of events
  * that produce LLM messages. The append-only log remains the source of truth.
  *
