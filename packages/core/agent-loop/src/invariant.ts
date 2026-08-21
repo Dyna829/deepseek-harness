@@ -1,4 +1,23 @@
 /**
+ * @file agent-loop 包自带的 invariant：检查「loop 发出的 LLM 请求」是否真的可从 session log 重建。
+ *
+ * 检查项（任一不过就 fail）：
+ *   1. 请求本身必须 `Object.isFrozen`（loop 构造完就冻，不允许中间修改）；
+ *   2. 必须带 `sessionId`，且这个 sessionId 必须是 live session；
+ *   3. `messages` 数组本身也必须 frozen；
+ *   4. session log 里至少有一条 `step/start`；
+ *   5. `foldRequestHeader(events)` 必须有结果（说明 log 里有 `request/header`）；
+ *   6. `JSON.stringify(options.messages)` 必须等于 `session.deriveMessages()`（log 重建出的消息）；
+ *   7. 请求的 model/system/temperature/maxTokens/stop/tools 必须等于 fold 出来的 header。
+ *
+ * 这套 invariant 的目的：保证 log 是「LLM 实际看到什么」的唯一真相，重放时跑出来的请求
+ * 必须和当时发的完全一致 —— 这是 replay 正确性的根。
+ *
+ * 注意用 `prepend: true` 注册：抢在普通 listener 之前，避免被中途的 replay listener
+ * 短路掉检查。
+ */
+
+/**
  * Package-owned request-reconstruction invariant for loop-built LLM calls.
  * @module @deepseek-ai/dsh-agent-loop/invariant
  */

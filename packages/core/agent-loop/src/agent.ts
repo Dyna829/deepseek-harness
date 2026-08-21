@@ -1,4 +1,26 @@
 /**
+ * @file 默认的 Agent driver：`ReactLoopAgent`。
+ *
+ * 这是 dsh 的「主动脑子」：收到 inbox 的输入（next-turn / next-step）就驱动
+ * session 跑 turn → step → request → tool → ... 的循环。
+ *
+ * 三大状态机（`Phase` 联合类型）：
+ *   - `idle`：没人干活；可能在等 followup/steer 唤醒
+ *   - `maintenance`：跑一个 `runMaintenance(...)` 任务，不算 turn
+ *   - `running`：当前有 turn 在跑，记录当前 turn 号和 step 号
+ *
+ * 核心循环的关键事实（也是 `request-reconstruction` invariant 要检查的）：
+ *   - 每次 LLM 请求**完全从 session log 重建**（`session.deriveMessages()` + `foldRequestHeader(events)`）
+ *   - 不在内存里攒 messages；任何状态变化都先落 log，再进内存
+ *
+ * 跟外部的连接点：
+ *   - 接收 `Inbox` 的事件
+ *   - 发 `agent/*` 事件给监听者
+ *   - 调 `ctx.llm.stream(...)` 走 LLM
+ *   - 调 `ctx.tools.executionMode(...)` + `executeToolCalls(...)` 跑工具
+ */
+
+/**
  * Default Agent driver over queued turns and step-boundary input. Every request
  * is derived from the session log.
  * @module dsh-agent-loop/agent

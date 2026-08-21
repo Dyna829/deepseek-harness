@@ -1,4 +1,20 @@
 /**
+ * @file 一个 assistant step 内所有 tool call 的调度器。
+ *
+ * 核心约束：
+ *   - 「独占（exclusive）」tool call 是 barrier：所有未启动的并行 call 都要等它跑完；
+ *   - 「并行（parallel）」tool call 用一个有上界（`maxParallelToolCalls`）的滚动池子跑；
+ *   - 派发（dispatch）可以重叠，但「结果 / 上下文」**必须**按模型给出的顺序落盘。
+ *
+ * 关键不变量：
+ *   - `committed` 只在「模型顺序连续」的 slot 上推进 —— 这就是「结果按模型顺序」的具体实现；
+ *   - 中途 abort 不会留下空洞：还没启动的 call 会被写一条 `tool/call` + 合成 `tool/result`，
+ *     错误是 `TOOL_ABORTED_BEFORE_DISPATCH`，保证 replay 时还能解析每条调用；
+ *   - 调度器内部失败（不是 abort 引起的）会保留已记录的 `tool/call` 但**不**编造结果，
+ *     让真实错误透传出去。
+ */
+
+/**
  * Schedules one assistant step's tool calls. Exclusive calls form barriers;
  * parallel calls use a bounded rolling pool and are reclassified before start.
  * Dispatch may overlap, while policy, results, and result context remain

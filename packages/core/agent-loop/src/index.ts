@@ -1,4 +1,24 @@
 /**
+ * @file Agent-loop 包入口：把 `ReactLoopAgent` 实例化、发布到 agent/session registry，并拥有它们的有序销毁。
+ *
+ * 本包角色（在 dsh 整体架构中）：
+ *   - 注册成 `ctx.agentLoop` 服务，类型 `AgentFactory`；
+ *   - 持有 `dsh-agent` 包的 `AgentRegistry.setFactory(...)` 注册，**实际负责**「创建 agent」这个动作；
+ *   - 启动时根据 `cordis.yml` 里的 `agents` 列表自动创建/恢复一组 agent（这是配置文件驱动的 agent 来源）；
+ *   - 暴露 `maxParallelToolCalls` 这一用户可配置上限。
+ *
+ * 关键数据流：
+ *   `AgentRegistry.create()` → 走到 `AgentLoop.createAgent()` → 准备 agent + session →
+ *   `PreparedAgent.publish()` 把它们推进 registry、广播 `agent/created` + `session/created`、
+ *   发 `agent/session-start`、启动 `ReactLoopAgent` driver。
+ *
+ * 关键不变量：
+ *   - 工厂级 `FactoryOwnership` 保证 fiber 卸载时「拒绝新建 + 销毁全部 + 等所有 startup task 退出」三件套；
+ *   - `applyLauncherIdentities` 让「启动器决定的 session 身份」永远覆盖「配置里写的」，
+ *     这样 launch CLI 可以无侵入地指定 session id，而不会和 config 冲突。
+ */
+
+/**
  * Concrete agent-loop plugin: creates scoped ReactLoopAgents, publishes them
  * through the agent/session registries, and owns their ordered teardown.
  *

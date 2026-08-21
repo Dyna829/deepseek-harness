@@ -1,4 +1,18 @@
 /**
+ * @file Agent 动态运行时上下文（runtime context）的持久化投影。
+ *
+ * 「运行时上下文」是 system-prompt 的一部分，由 system-prompt 包渲染出当前快照文本，
+ * 本类的职责是：
+ *   1. 启动时从 session log 倒序找最近一次「runtime context 拥有者」发出的 `user/message`，
+ *      记录成「保留快照（retained）」；
+ *   2. 监听 `session/event`，后续新快照覆盖它、surface 替换（compact、clear）把它置空；
+ *   3. `project(current, sections)` 决定要不要把当前快照**追加**一条 `user/message` 到 log。
+ *
+ * 为什么这样设计：避免每次 step 都把相同的 runtime context 重发一遍进 LLM 历史，只在
+ * 实际变化时才追加。这样 log 可重放、prompt 稳定。
+ */
+
+/**
  * Durable projection state for dynamic runtime context.
  * @module @deepseek-ai/dsh-agent-loop/runtime-context
  */
