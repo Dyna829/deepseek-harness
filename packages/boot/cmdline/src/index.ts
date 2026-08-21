@@ -1,5 +1,23 @@
 /**
- * @deepseek-ai/dsh-cmdline — the command line a dsh launcher hands to the app
+ * @file `dsh` 启动器把它**自己解析完**之后的 argv 内层段，交给要启动的 app。
+ *
+ * 关键边界：
+ *   - 启动器**只**解析 launcher 自己的 flag（`--profile` / `--patch` / config dump），
+ *     它们之后的所有 argv 原封不动透传进 app，**不**进 launcher 的 flag 解析器；
+ *   - 之后 app 拥有自己的 flag 家族、自己的 `--help` 文案、自己的 parse error。
+ *   - 这条边界由 `CmdlineArgs` 服务表达：app 启动时 `inject` 它，从自己 commander
+ *     程序的 action 里发请求；config row 也可以 `!!js ctx.cmdlineArgs.get()` 拿到。
+ *
+ * 包内文件分工（只有 4 个 + invariant）：
+ *   - `index.ts`（本文件）：`CmdlineArgs` / `AppExit` 服务声明 + `provideCmdline` /
+ *     `parseCmdline` 两个动词
+ *   - `invariant.ts`：本包不挂运行时事件流，install 是空实现
+ *
+ * 与其他模块的连接点：
+ *   - `app-boot/` 的 launcher 在 mount 树之前调 `provideCmdline`
+ *   - app 包在自己的 commander `.action()` 里调 `parseCmdline`
+ *   - 任何 Loader row 可以 `!!js` 读 `ctx.cmdlineArgs.get()`，让命令行 flag 覆盖 config
+ */
  * it boots.
  *
  * The launcher parses only its own flags (`--profile`, `--patch`, the config
