@@ -1,6 +1,15 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-host-frontend-static`.
- * @module @deepseek-ai/dsh-host-frontend-static/invariant
+ * @file `dsh-host-frontend-static` 的 invariant companion 入口。
+ *
+ * 本包**没**有运行时挂的不变量——**唯一**的关系是「**一**个 fallback seat」，
+ * 但 `internal/plugin` 在 disposing fiber 的 effects **之前** fire，所以
+ * 合法 owner 在通知时仍**持**该 seat，**任何**「seat claim」probe 都会在
+ * 每次正确 dispose 时假阳性（跟 webserver companion 不一样，**它**的
+ * reserved-path probe 永远不会撞上 live registration）。seat register / release
+ * 对称性走 real-composition HMR-safety 测试覆盖。
+ *
+ * `install` 留作未来挂「`distRoot` 必须在 dist index 父目录」之类**装配期**
+ * 不变量时的占位。
  */
 
 import type { Context } from '@deepseek-ai/cordis'

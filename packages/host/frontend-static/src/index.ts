@@ -1,14 +1,32 @@
 /**
- * @deepseek-ai/dsh-host-frontend-static — SPA dist server over the webserver
- * fallback seat: serves the built frontend directory with the semantics the
- * Web shell locked at step1 — traversal outside the dist root is 403, any
- * miss falls back to index.html with HTTP 200 (SPA routing), unknown
- * extensions ship as octet-stream, non-GET/HEAD is 405. Every index response
- * runs through the webserver's registered index taps (boot-manifest
- * injection). The dist location is workspace knowledge of the composing
- * application, so `distIndex` is typically supplied through a `!!js`
- * expression, never hardcoded by a deployment.
- * @module @deepseek-ai/dsh-host-frontend-static
+ * @file `dsh-host-frontend-static`——SPA dist 在 webserver fallback seat 上的
+ * 静态 server。
+ *
+ * 关键设计点（**写代码容易绕过的**）：
+ *   - **「dist root 之外 = 403」**：`resolve(normalize(join(distRoot, pathname)))`
+ *     **必须**等于 `distRoot` 自身（`/`）**或**以 `distRoot + sep` 开头。
+ *     `sep`（**不**是 `/`）——`resolve()` 在 Windows 上 emit 反斜杠路径，
+ *     `target.startsWith(distRoot + '/')` 会把「C:\dist\sub\file」拒成
+ *     traversal。
+ *   - **「任何 miss → 200 + index.html」**：S**P**A 路由 fallback——client
+ *     router 接住路径参数，**不**让后端 404。
+ *   - **「非 GET/HEAD = 405」**：fallback-only 语义——named route 自己
+ *     拥有 method 处理权；fallback 拿到的**不**该是 PUT/POST。
+ *   - **「index 走 webserver 的 index taps」**：`renderIndex` 调
+ *     `ctx.webServer.applyIndexTaps(...)`——boot-manifest 注入等
+ *     composition-level 的插入**都**通过 tap 走，**不** hard-code 到本
+ *     文件。
+ *   - **「未知扩展 = octet-stream」**：`MIME[ext] ?? 'application/octet-stream'`
+ *     ——**不**让未知 type 拿到「猜」的 MIME 头。
+ *   - **`distIndex` 是 workspace 知识**：典型由 `cordis.yml` 里 `!!js`
+ *     表达式**算**出来，**不**让 deployment 硬编 dist 位置。
+ *
+ * 与其他模块的连接点：
+ *   - `ctx.webServer.registerFallback` 是挂载点（fallback seat）
+ *   - `ctx.webServer.applyIndexTaps` 是 index 注入钩子
+ *   - `node:fs/promises` 提供 `readFile`
+ *   - 任何把 dist 路径作为 `cordis.yml` 表达式计算的上游 composition
+ *   - `host/webserver` 提供 fallback seat
  */
 
 import type { ServerResponse } from 'node:http'
