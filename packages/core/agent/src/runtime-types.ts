@@ -1,4 +1,27 @@
 /**
+ * @file Agent 的对外公共类型 + 实时事件声明。
+ *
+ * 这里有：
+ *   - `Agent` 接口：所有 live agent 实例必须实现的样子（id、session、inbox、ctx、状态机方法）
+ *   - `AgentOptions`：创建 agent 时传入的「provider + model + maxTokens」
+ *   - `AgentStatus`、`PreStepDecision`、`RequestErrorAction`、`SessionStartSource`：状态枚举/判别联合
+ *   - 大段 `declare module '@deepseek-ai/cordis'` 块：声明 `Events` 接口上 `agent/*` 这一组事件
+ *
+ * 哪些事件属于这一层：
+ *   - 生命周期：agent/created、agent/disposed、agent/status
+ *   - 收件箱：agent/inbox/inserted、agent/inbox/claimed、agent/inbox/discarded
+ *   - 启动：agent/session-start
+ *   - 机器扩展点（可拦截）：agent/pre-step（waterfall）、agent/request（waterfall）、
+ *     agent/request-error（waterfall）、agent/turn-stopping（serial）
+ *   - 错误通知：agent/error
+ *
+ * 设计原则：
+ *   - 持久化事件（turn/start、turn/end、step/*、message 等）属于 dsh-session，不在这里；
+ *   - 实时事件在这里，且用 `Scoped<Agent>` 作为 `this` 类型，scope 过滤自动生效，
+ *     agent 自己注册的监听器只会收到「跟这个 agent 相关」的事件。
+ */
+
+/**
  * Public agent types and live-runtime events. Durable transcript facts and
  * turn/step boundaries remain `@deepseek-ai/dsh-session` events.
  *

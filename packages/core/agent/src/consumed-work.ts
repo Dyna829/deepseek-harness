@@ -1,4 +1,17 @@
 /**
+ * @file 「某个 agent 日志到底消费了哪些工作」的回算函数。
+ *
+ * 之所以需要这个：光看 turn/step 边界无法区分「成功完成」和「还没开始就被拒」两种
+ * 「turn 关闭且没产生 step」的情况。这两类日志形状完全一样。
+ *
+ * 解法：去看 inbox 的 `agent/inbox/spliced` 事件里有没有 `outcome: 'canceled'` 标记，
+ * 有就说明有工作被「认领但从未真正跑」。
+ *
+ * 用法：给一段 session event 数组（哪怕是后缀），单次扫描就能算出最后一个有意义的
+ * `turn/end` 和「这个 turn 之后是否还有未跑的工作」。
+ */
+
+/**
  * How one agent log accounts for the work it consumed.
  *
  * The turn and step vocabulary alone cannot answer this. A turn that stops

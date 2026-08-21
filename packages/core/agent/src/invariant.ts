@@ -1,3 +1,13 @@
+/**
+ * @file Agent 包自带的 invariant 插件。
+ *
+ * 挂在 `ctx.invariants` 服务上，作为 `agent-invariant` 协伴插件。
+ * 当前唯一的检查：`agent/status` 事件不能重复发同一个值（无意义的状态切换）。
+ *
+ * 这是 dsh 的「linter」机制 —— 通过 fail() 把可疑状态报告出来，不影响主流程，
+ * 但留下足迹供开发期调试。
+ */
+
 /** Package-owned agent lifecycle invariants. @module @deepseek-ai/dsh-agent/invariant */
 
 import type { Context } from '@deepseek-ai/cordis'

@@ -1,4 +1,18 @@
 /**
+ * @file Agent 收件箱（Inbox）的内存投影。
+ *
+ * Inbox 是「待处理用户消息」的两个有序列表：
+ *   - `next-turn`：等下一整个 turn 才能消费的消息
+ *   - `next-step`：等最近的下一次 step 边界就能消费的消息
+ *
+ * 关键性质：
+ *   - 构造时从 session log 的 `agent/inbox/spliced` 事件历史**重放**出当前快照，所以新建 agent
+ *     也能立即看到之前的 inbox 状态；
+ *   - 所有改动都先写 session 事件，再改内存投影 —— 所以「session 是真相之源，inbox 只是它的视图」；
+ *   - 通过 callback 把「插入/丢弃/认领」三种实时变化通知给 loop。
+ */
+
+/**
  * Incremental projection of durable agent inbox events.
  *
  * @module @deepseek-ai/dsh-agent/inbox

@@ -1,4 +1,16 @@
 /**
+ * @file Agent 作用域事件分发与 prompt 组装辅助。
+ *
+ * 提供两个核心能力：
+ *   1. `agentEvents`：把「agent 主体」和「scope 载体」焊在一起的事件分发器，确保事件载荷里的 `agent`
+ *      永远等于 scope 键，调用方拿不到分裂视图。
+ *   2. `assembleContextFor`：为 prompt 组装阶段准备「这个 agent 加上它的 scope」上下文。
+ *
+ * loop 包在构造 agent 时会调用一次 `agentEvents` 并把返回的 dispatcher 存为成员变量，
+ * 这样热路径上 dispatch 事件不会重复分配。
+ */
+
+/**
  * Agent-scoped dispatch and prompt assembly helpers. The fused dispatcher
  * {@link agentEvents} couples the agent subject to its scope carrier, so the
  * scope key and the payload's `agent` cannot diverge; repeat dispatchers (the

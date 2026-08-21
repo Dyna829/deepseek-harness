@@ -1,4 +1,21 @@
 /**
+ * @file Agent 作用域内的「当前选中模型」管理。
+ *
+ * 解决的问题：当用户/外部在 step 还在跑的时候改 model，怎么让 prompt 组装和
+ * model 请求看到的 model 永远一致？
+ *
+ * 解法：分两个时刻快照。
+ *   1. 在 `system-prompt/assemble` 这个 waterfall 里：进入前把 `current` 拷给 `assembled`，
+ *      然后继续 next()；这个快照决定 prompt 里写哪个 model；
+ *   2. 在 `agent/request` 这个 waterfall 里：用「assembled 时刻的快照」改 request 的
+ *      provider/model 字段。
+ *
+ * 这样「切换发生在 step 跑到一半」时：prompt 和 request 看到的 model 还是切换前的
+ * 那个值；切换从下一个 step 开始生效，不会出现「prompt 写 model A，request 发给
+ * model B」的撕裂状态。
+ */
+
+/**
  * Agent-scoped model selection shared by runtime entry points.
  * @module @deepseek-ai/dsh-agent/model-selection
  */
