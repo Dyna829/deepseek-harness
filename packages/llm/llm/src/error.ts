@@ -1,7 +1,29 @@
 /**
- * Harness error base with a stable machine-routable code and chained cause.
- * Package errors extend it so tool results and replay can retain failure class.
- * @module @deepseek-ai/dsh-llm/error
+ * @file `HarnessError` 基类 + 跨包共用的「稳定 machine-routable code」常量子集。
+ *
+ * 设计动机：tool result / replay / retry policy / UI 都需要**路由**一个失败
+ * （「是 rate limit 还是 auth 失败」「该 retry 几次」），但每个失败源都
+ * 包装自己类的 throw —— 如果用 `instanceof` 跨包判断就脆了，跨 package
+ * bound 拷贝时 class 身份还不一定保。
+ *
+ * 所以这里所有「需要路由」的失败都带一个**字符串 code** + 可序列化 facts
+ * + 标准 `cause` 链。跨包解析时拿字符串 + facts，不靠 class identity。
+ *
+ * 几个「容易被忘掉但很关键」的 code：
+ *   - `CONTEXT_WINDOW_EXCEEDED`：和「模型拒绝生成」区分——这一类该 compaction
+ *     流水线去处理，不该丢给用户。
+ *   - `QUOTA`：账户余额耗尽——retry policy 看到它**不**重试（重试也白烧钱）。
+ *   - `EMPTY_RESPONSE`：provider 正常完成但 0 个 block。重试是安全的
+ *     （provider 自己也是这个建议），所以**在** default retryable 集合里。
+ *   - `INVALID_CREDENTIAL`：key 形态合法但被 provider 拒——**不在**默认
+ *     retryable 集合，「重试一万次还是 401」是反信号；distinct from
+ *     `MISSING_CREDENTIAL`，那个该补配置，这个该改配置。
+ *
+ * 与其他模块的连接点：
+ *   - `LlmError`（`index.ts`）继承 `HarnessError`，把 LLM 相关 facts 收编
+ *   - `retry-policy.ts` 的默认 `retryableCodes` 直接 import `EMPTY_RESPONSE_CODE`
+ *   - 任何 `throw` 上来的失败（adapter / transport / 中间件）都希望用这层
+ *     `code`，否则 retry / 路由链路会失明
  */
 
 /**

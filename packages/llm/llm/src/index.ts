@@ -1,9 +1,45 @@
 /**
- * LLM service: adapter registry with a waterfall-interceptable streaming call
- * API. Exports the `LlmRuntime` default, the abstract `LlmAdapter` for
- * provider backends, and `BlockAssembler` for chunk assembly.
+ * @file `ctx.llm` 的本体：adapter 注册表 + 可被 waterfall 拦截的流式调用 API。
  *
- * @module @deepseek-ai/dsh-llm
+ * 关键设计点（很多都是「不写代码就破」那种）：
+ *   - **Adapter / Configurable provider / Discovery 三类注册入口**：
+ *     `registerAdapter(providers, adapter)` —— 把 provider route 绑定到一个
+ *     `LlmAdapter` 实例；`registerConfigurableProviders(entries)` —— 声明
+ *     「可以被 settings 激活的 provider」；`registerModelDiscovery(ns, fn)` —
+ *     暴露给 settings 命名空间做 endpoint 探测。三个的 `replace` 路径都
+ *     「**先验完整集合，再一次性 commit**」，避免「撤了旧的、新挂不上时目录
+ *     空了一段」的竞争。
+ *   - **`llm/stream` waterfall**：每次 `stream()` 都从 `ctx.llm` 上发一个
+ *     waterfall 事件，下游可以包 retry / replay / 路由拦截。**适配器本身是
+ *     这个 waterfall 的 `next()` 终点**——所以 retry 包一层、replay 改一段
+ *     chunk 都不用碰 adapter。
+ *   - **`prepareCall` 把 capability lookup 和 dispatch 绑到同一次注册**：
+ *     HMR 触发 adapter 替换时，header logging 拿到的能力结果和实际 dispatch
+ *     一定是同一个 adapter，**不会**出现「旧 adapter 的能力 + 新 adapter 的
+ *     dispatch」拼起来的混合体。
+ *   - **Replay state 走「同一 adapter 实例才保留」**：`forAdapter` 过滤
+ *     assistant message 上的 `replayState`，只在「历史 provider 当前的
+ *     adapter 就是同一个」时透传——避免 replay 路径走了 A adapter 但 provider
+ *     现在挂在 B 名下，结果 B 解码 A 的内部状态。
+ *   - **失败分类**：`LlmError` 走「稳定 code + 可序列化 facts」模式，
+ *     跨 adapter / 跨 retry 都用同一套分类（`AUTH` / `RATE_LIMIT` /
+ *     `NO_ADAPTER` / `REGISTRATION_DISPOSED` / `INVALID_PREPARED_CALL` / …）。
+ *     adapter throw 在 `adapterStream` 里被翻成一个 `finish: error` chunk 而
+ *     不是上抛——这样下游消费方永远走统一的「finish 收尾」路径。
+ *
+ * 关键不变量：
+ *   - `dispatched` 锁保证 `PreparedLlmCall` 只能 dispatch 一次，重复调
+ *     / config 被改都报 `INVALID_PREPARED_CALL`。
+ *   - `released` 锁保证「disposed 之后再 `replace`」抛 `REGISTRATION_DISPOSED`，
+ *     不让没有 owner 的注册悄悄把新 route 挂进 map。
+ *   - `emitAdaptersUpdated` 自带「一个 listener 挂掉不影响其它 listener」的
+ *     隔离（用 try/逐个 + INVARIANT 优先再抛）。
+ *
+ * 与其他模块的连接点：
+ *   - `llm-deepseek` / `llm-pi-ai` 各自提供 `LlmAdapter` 实现
+ *   - `llm-retry` 监听 `llm/stream` waterfall 做指数退避
+ *   - `agent-loop` 通过 `prepareCall` + `stream` 跑 LLM 主循环
+ *   - `token-meter` 监听 waterfall / 解析 `usage` chunk
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
@@ -280,6 +316,15 @@ export interface DirectoryRegistrationHandle {
 /**
  * The abstract `llm` service: an adapter registry plus a streaming model-call
  * API, interceptable via the `llm/stream` waterfall.
+ *
+ * @description 中文说明：
+ *   本包导出的「`ctx.llm`」就是这个 class。它本身不做 HTTP——只管：
+ *     1. 三类注册的「保证整集合合法后才 commit」+「`replace` 同步一段
+ *        swap，外部观察不到 gap」；
+ *     2. `stream()` 永远走 `llm/stream` waterfall，下游可重试 / 重放 / 路由；
+ *     3. `prepareCall` 绑定「一次 adapter registration」给 header log +
+ *        dispatch，抵御 HMR 期间 adapter 替换。
+ *   所有真实 provider 行为在 `LlmAdapter` 子类里（`llm-deepseek` / `llm-pi-ai`）。
  */
 export class LlmRuntime extends Service {
   private adapters = new Map<string, AdapterRegistration>()

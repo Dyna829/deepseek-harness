@@ -1,9 +1,24 @@
 /**
- * Conversation call configuration and freeze utilities. Provider routing,
- * model, reasoning effort, and sampling values are request-header state that
- * can affect cache reuse; request waterfalls replace them and the loop logs
- * changed snapshots instead of allowing silent per-call drift.
- * @module dsh-llm/call-config
+ * @file LLM 调用配置（`LlmCallConfig`）+ 不可变深冻 + 「loop 发的 request」标识。
+ *
+ * 关键概念：
+ *   - **`LlmCallConfig` 是「epoch-level」**：provider / model / reasoning /
+ *     sampling 这些**会影响 prompt cache 命中**的值。loop 不让 caller 每个
+ *     call 改它们——只在「配置真变了」时记一个新 snapshot 进 session log。
+ *     这就是「请求 waterfall 整体替换 / 改了才记」的设计。
+ *   - **`AGENT_LOOP_REQUESTS`（WeakSet）**：`markAgentLoopRequest` 给「loop 组装
+ *     出来的 `GenerateOptions`」打标，下游 `llm/stream` listener 一看就知道
+ *     「这个 request 是 process-local loop 发的，结构是 session log 的纯函数，
+ *     不要想着 mutate 它」。手搓 caller 不带这个标。
+ *   - **`deepFreeze` 跳过 `AbortSignal`**：signal 是「live cancellation 通道」，
+ *     冻住它 abort 链路就坏了。其它一切（包括消息 content / metadata）
+ *     **全部**冻——loop / replay / 跨 adapter 转交都靠这个 frozen 不变量。
+ *
+ * 与其他模块的连接点：
+ *   - `LlmRuntime` 在 `prepareCall` / `stream` 路径上 deep-freeze + 比较
+ *   - agent-loop 每次组装 request 时 `markAgentLoopRequest` + deep-freeze
+ *   - `llm/stream` waterfall 的 listener 通过 `isAgentLoopRequest` 决定读
+ *     还是改它
  */
 
 import type { GenerateOptions } from './types.ts'

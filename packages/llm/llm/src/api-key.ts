@@ -1,7 +1,22 @@
 /**
- * The one definition of a well-formed provider API key, shared by every
- * adapter that puts one in an HTTP header.
- * @module @deepseek-ai/dsh-llm/api-key
+ * @file 「一个 HTTP header 能装的 API key 形态」唯一判定，跨 adapter 共享。
+ *
+ * 关键约束：
+ *   - **字符集 = `0x21..0x7E`**（可打印 ASCII，**不含**空格）——`fetch` 在
+ *     header 里碰到越界字符直接拒，连 header 都不会构造，所以这条是「**传输层**
+ *     不变量」不是「某个 provider 的策略」。Latin-1 也**不**放进来：header
+ *     能载它，但**没有** provider 发它，放进来等于把「本地可解释的拒绝」换成
+ *     「对面 401」。
+ *   - **trim 是 silent**（带空格的 key 切掉就行），**其它**缺陷都暴露——
+ *     因为「带空格」只有一种读法，其它坏键（控制字符 / Latin-1）的修法不一
+ *     样，silent 就掩盖了。
+ *   - **「没有 key」是配置态，本函数不查**——「没配 key」和「配了坏 key」是两件
+ *     事，修法不同；absence 留给 caller（profile 层、credentials seam）判断。
+ *
+ * 与其他模块的连接点：
+ *   - `LlmRuntime.assertUsableApiKey` 调 `normalizeApiKey` 拿到 verdict
+ *   - 任何想加进来的 provider adapter 都走这条路——不在 adapter 里再写一份
+ *     「能不能放 header」
  */
 
 /**

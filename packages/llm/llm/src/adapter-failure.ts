@@ -1,7 +1,25 @@
 /**
- * Normalization for values thrown by a final LLM adapter boundary.
+ * @file LLM adapter 边界 throw 出来的值的「归一化」——把任意值（Error / 普通
+ * throw / SDK Error 副本）转成可序列化的 `LlmFailure`。
  *
- * @module @deepseek-ai/dsh-llm/adapter-failure
+ * 关键约束（写在那里但必须理解才能改）：
+ *   - **跨 package 拷贝 `instanceof` 不可信**：SDK 抛出来的 `LlmError` 经过
+ *     structured-clone / cross-realm 之后 class identity 可能丢。所以本模块
+ *     走「读 own data property」路线，**不**靠 `instanceof HarnessError`。
+ *   - **`failure` / `code` 都用 own property descriptor 读**：用 `getOwnPropertyDescriptor`
+ *     拿 data descriptor 而不是直接 `error.failure`——后者会触发 SDK 写的
+ *     accessor，里面可能抛 `TypeError`（SDK property trap）。要的就是「读 own
+ *     data，绕过 accessor」。
+ *   - **信任门**：只有「`carried.code === ownErrorCode(error)`」完全一致，才
+ *     采用 SDK 自带的 `failure` 快照；否则只用 `message` + `harnessErrorCode`
+ *     重做一个——任何字段对不上就当「这个 SDK 不可信」。
+ *   - **hostile value 容错**：`String(value)` / `error.message` 都用 try/catch
+ *     兜底——adapter 抛「getter throws」之类病态对象不能让归一化函数自己挂。
+ *
+ * 与其他模块的连接点：
+ *   - `LlmRuntime.adapterStream` 在 adapter 失败时调 `normalizeLlmFailure`，
+ *     再产 `finish: error` chunk
+ *   - `retry-policy` 读 `LlmFailure.code` 决定要不要重试
  */
 
 import { HarnessError } from './error.ts'

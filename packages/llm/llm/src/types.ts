@@ -1,7 +1,27 @@
 /**
- * Canonical provider-neutral message and streaming vocabulary for the loop,
- * session log, and plugins. Adapters alone translate provider wire messages;
- * mapped interfaces make the content, source, and finish unions extensible.
+ * @file 给 agent-loop / session / plugins 共用的「provider-无关」消息和流式词表。
+ *
+ * 三个层面在这一处定型：
+ *   1. **Message 形状**（`Message` union + `MessageSource` 映射）—— 上游「事实
+ *      数据」层（`./message.ts`）拼装的基础；adapter 不知道这层，但下游
+ *      agent-loop / session log / replay 都靠它跨 adapter 同步语义。
+ *   2. **ContentBlock 形状**（text / reasoning / tool-call / tool-result / image）——
+ *      也是声明合并风格，新增 variant 时把 union 加一处，所有 `switch` 自动收
+ *      到「未覆盖」编译错误。
+ *   3. **StreamChunk 词表**（block-start / text-delta / reasoning-delta /
+ *      tool-call-delta / block-end / usage / finish）—— adapter 必须用这套词
+ *      喂给 `BlockAssembler`，**不能**直接吐 provider 原生 message。
+ *
+ * `mapped interface`（`MappableMappedInterface`）风格是有意为之：content /
+ * source / finish 用 mapped interface 实现「加一个变体只改一处」，避免
+ * declaration-merged union 那种「每个 switch 都得记得加 case」。
+ *
+ * 与其他模块的连接点：
+ *   - `llm-deepseek` / `llm-pi-ai` 各自实现 `LlmAdapter.stream()`，把 provider
+ *     原生 message 翻成 `StreamChunk`
+ *   - `assembler.ts` 的 `BlockAssembler` 消费 `StreamChunk` 产 `ContentBlock[]`
+ *   - `message.ts` 在这层 union 上加 immutable 创建契约
+ *   - `invariant.ts` 在 `llm/stream` waterfall 上跑协议层 grammar 检查
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'

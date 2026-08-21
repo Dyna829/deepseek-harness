@@ -1,10 +1,24 @@
 /**
- * Centralize the non-secret product identity every provider request sends as `User-Agent`, keeping
- * adapters from drifting. See
- * `.agents/notes/implemented/architecture/2026-06-21-mandatory-app-attribution-headers.md`.
+ * @file 跨 adapter 集中的「app attribution 头」：每个 provider request 都带的
+ * `User-Agent`，防止不同 adapter 各写一份导致漂移。
  *
- * App-attribution vocabulary for provider requests.
- * @module @deepseek-ai/dsh-llm/attribution
+ * 安全约束（写在 `AppIdentity` 的 JSDoc 上，**不**是 comment 说说而已）：
+ *   - 字段都是**公开产品事实**——product 名 / version / repo URL；
+ *   - **不能**放 secrets、本地路径、session id、prompt 文本、per-user 标识；
+ *   - **不能**被 per-request 参数影响——同一个 product 同一份 version，**任何**
+ *     请求都带一样的头。这条保证让 provider 端做 abuse / 配额策略时不会被
+ *     「每个请求伪造一个 user-agent」绕开。
+ *
+ * 集中之后还有一个好处：第三方（白标 / fork）想换 identity，调
+ * `attributionHeaders(myIdentity)` 传一个 `AppIdentity` 进去；**不能**通过
+ * 省略参数把它关掉——默认 fallback 就是 `APP_IDENTITY`，没有「完全无 attribution」
+ * 这条路。
+ *
+ * 与其他模块的连接点：
+ *   - `llm-deepseek` / `llm-pi-ai` 的 adapter 在 outgoing request 上 merge
+ *     `attributionHeaders()`
+ *   - 任何加进来的新 provider adapter 都必须遵守这条（adapters 文档里写了
+ *     「prove the headers are added」）
  */
 
 import { createRequire } from 'node:module'

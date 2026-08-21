@@ -1,10 +1,26 @@
 /**
- * Provider-owned request-retry policy configuration and resolution.
+ * @file 「一个 provider route 的重试策略」配置 + 解析。
  *
- * Adapters expose one resolved policy per registered provider route; the
- * optional dsh-llm-retry plugin executes it on the agent's failed-step extension point.
+ * 重要分工：
+ *   - **adapter 暴露**自己每个 provider 的 `providerRetryPolicy(provider)`，
+ *     在 `LlmRuntime.registerAdapter` 时被解析、deep-freeze 存起来；
+ *   - **`dsh-llm-retry` 包**（可选插件）监听 agent 的 failed-step 扩展点，
+ *     实际跑重试；本文件**只**定义配置形态 + 解析 + 默认值。
  *
- * @module @deepseek-ai/dsh-llm/retry-policy
+ * 关键不变量：
+ *   - **`maxDelayMs` 上界 ≤ `MAX_TIMER_DELAY_MS`**（来自 `dsh-timeout`）——
+ *     Node setTimeout 在更大值上行为是「立刻触发」，会绕过 backoff 设计。
+ *   - **`jitterRatio` 0..1**，**对称**（乘 1±ratio），不是单边加——对称保证
+ *     「延后」和「提前」的概率一致，不会让 N 个 worker 全挤到同一时刻重试。
+ *   - **`AlwaysRetry` 是 unbounded，但 cancellation / disposal 仍能停**：
+ *     不是「永远」而是「除了 cancel / dispose 之外永远」。
+ *   - **`OFF` 一旦声明就不接收任何隐式重试**：adapter 默认 `resolveRetryPolicy(undefined)`
+ *     拿不到 `OFF` 的语义，调用方必须显式声明。
+ *
+ * 与其他模块的连接点：
+ *   - `LlmRuntime` 在 `registerAdapter` 路径上读 `providerRetryPolicy()`
+ *   - `dsh-llm-retry` 监听 `agent/step-failed`（或等效事件）跑 policy
+ *   - `dsh-timeout` 给 `MAX_TIMER_DELAY_MS` 上界
  */
 
 import z from '@deepseek-ai/schemastery'

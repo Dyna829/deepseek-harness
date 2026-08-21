@@ -1,4 +1,29 @@
-/** Message value types, identity, and immutable construction helpers. */
+/**
+ * @file `Message` 的值类型、身份、和「不可变构造」帮手。
+ *
+ * 这里解决的是「assistant message 是带 replay state 的不可变结构」这件事——
+ * 跨 adapter / 跨 session log / 跨 replay 三层都要能复用同一份字面量。
+ *
+ * 关键概念（`MessageSource`）：
+ *   - **`ModelMessageSource`**：assistant message 来自 routed model，带 provider /
+ *     model 身份 + adapter-private `replayState`。`replayState` 由
+ *     `LlmRuntime.forAdapter` 把关，**只有**当目标 adapter 仍拥有历史 provider
+ *     AND 目标 provider 时才透传——避免「A adapter 的私货」被「B adapter」解码。
+ *   - **`ToolMessageSource`**：user-role 消息携带 tool result，附 `CallId`。
+ *   - **`ContextForm`**：producer 声明的「这是哪一类上下文」（`instructions` /
+ *     `catalog` / …），**语义**而非视觉——UI 怎么呈现是 consumer 的事，本词表
+ *     不掺颜色 / 图标 / 折叠。
+ *
+ * 不可变创建：所有公开 constructor / factory 都跑 `deepFreeze`——保证
+ * 「同 session replay 时结构字面量相等」这件事能稳定成立，不被某次业务代码
+ * 偷偷改 `messages[i].content` 破坏。
+ *
+ * 与其他模块的连接点：
+ *   - `BlockAssembler` 调 `createMessage` 把 blocks 装成 `Message`
+ *   - session log / agent-loop / replay 全部消费「deep-frozen message」
+ *   - `llm-deepseek` / `llm-pi-ai` 在「自己 adapter 仍 owned」前提下读
+ *     `replayState`
+ */
 
 import { MessageId, type CallId } from './brand.ts'
 import { deepFreeze } from './call-config.ts'

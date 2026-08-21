@@ -1,9 +1,23 @@
 /**
- * Incremental chunk-to-message assembler. This is the single canonical assembly
- * algorithm used by the agent loop to build an assistant message from a chunk
- * stream while logging the raw chunks for replay fidelity.
+ * @file 把「adapter 流式吐出的 `StreamChunk`」拼成完整的 assistant `Message`。
  *
- * @module @deepseek-ai/dsh-llm/assembler
+ * agent-loop 跑主循环时一边 raw-chunk 落 log（**用来 replay**），一边喂
+ * `BlockAssembler`。loop 只在流结束 / 中断之后才 `blocks()` / `message()` 一
+ * 次——**不**做 partial-state 探测，因为 partial 是 replay 唯一不关心的状态。
+ *
+ * 设计要点：
+ *   - **容错 delta-only 协议**：有些 provider 不发 `block-start` / `block-end`，
+ *     只有 `text-delta` 这种增量；assembler 对此透明。
+ *   - **已 `block-end` 闭合的 index 收到新 delta 直接忽略**——「协议层不变量
+ *     失败」不能污染已完成的 block，也不能让一个捣乱的 adapter 无限增长内存。
+ *   - **双写路径**：`blocks()` 来自自己的 partial 状态；`replayState` 来自
+ *     adapter 的私货；两条路径**互不影响**——adapter 重放出来的 chunk 走
+ *     同样的 assembly 路径，产同样的内容。
+ *
+ * 与其他模块的连接点：
+ *   - `LlmRuntime.adapterStream` 是 chunk 的来源
+ *   - `message.ts` 的 `createMessage` 翻装完成的 blocks 成 assistant `Message`
+ *   - agent-loop 持一个实例，跟一次 assistant 步同寿命
  */
 
 import { CallId } from './brand.ts'

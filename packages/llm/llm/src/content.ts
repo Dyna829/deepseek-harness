@@ -1,4 +1,25 @@
-/** Content-block structure helpers. @module @deepseek-ai/dsh-llm/content */
+/**
+ * @file `ContentBlock` 树形结构上的共用图像策略：探测 / 容量裁剪。
+ *
+ * 关键设计：
+ *   - **`contentHasImage` 走递归**——`tool-result` 块可能嵌一个 `content[]`，
+ *     嵌的内容还可能嵌……这条递归是**全包**共享的（capability gating /
+ *     text-only 序列化 / compaction survey 等等），不能各算各的，否则
+ *     「一个 tool-result 嵌了图」会被不同路径算成不同结果。
+ *   - **`offloadRequestImages` 只改 transient request 副本，不动 durable
+ *     messages**——裁剪是「发 provider 那一刻」的事，session log 里的
+ *     内容**永远**保留完整 image；这样 replay 时是从 log 重建，不是从
+ *     裁剪后的 request 重建。
+ *   - **从最老开始裁剪**（`replaceOldestImages`）——视觉上老图重要性最低，
+ *     行为上 deterministic from durable order。
+ *   - **`OFFLOADED_IMAGE_TEXT` 显式提示「这不是被吞了，是被搬走了」**：
+ *     模型不会被「image 神秘消失」误导去问用户重新附。
+ *
+ * 与其他模块的连接点：
+ *   - `LlmRuntime.stream` 在最终拼 provider request 时调 `offloadRequestImages`
+ *   - agent-loop 的图像 preflight 调 `contentHasImage` 判断能力
+ *   - compaction 包可能用 `contentHasImage` 做「这轮能不能压缩」判定
+ */
 
 import type { ContentBlock } from './types.ts'
 import type { Message } from './message.ts'

@@ -1,9 +1,22 @@
 /**
- * Exhaustiveness helper for closed core unions. Use {@link assertNever} at the default branch so a
- * new variant fails compilation at every required handler. Do not use it for declaration-merged
- * unions such as session events or content blocks: handle known variants and explicitly fall
- * through because plugins may add valid unknown cases.
- * @module @deepseek-ai/dsh-llm/never
+ * @file 闭 core union 的「穷尽性」帮手：`assertNever`。
+ *
+ * 用法（switch default branch 上写 `assertNever(x, 'switch 上下文')`）：
+ *   - 加一个 union variant 时**编译期**就在每个 `switch` 卡住——TS 把
+ *     `never` 类型上 `assertNever` 的调用点报错。
+ *   - 真的有「值逃出类型」时**运行期** throw，并把「逃出去那个值」用
+ *     JSON 渲染到 message 里。
+ *
+ * **不**适用于：declaration-merged union（session events / content blocks
+ * 这类下游插件可能新加合法变体的）。那种 union 必须**显式** fall through
+ * 默认分支（不是用 `assertNever`），不然插件加新变体就把你编译死了。
+ *
+ * `JSON.stringify(x) ?? String(x)` 这一行：JSON 在 `undefined` 上返回
+ * `undefined`，`String(...)` 兜底；`as string` 强制 TS 信。
+ *
+ * 与其他模块的连接点：
+ *   - `BlockAssembler` / `LlmRuntime.adapterStream` / agent-loop state machine
+ *     都在 closed union 的 default 分支调它
  */
 
 /**
