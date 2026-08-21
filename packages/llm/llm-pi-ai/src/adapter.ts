@@ -1,5 +1,33 @@
 /**
- * Generic pi-ai-backed implementation of the Harness LLM seam.
+ * @file 通用 pi-ai-backed `LlmAdapter` 实现。
+ *
+ * 关键不变量（**写代码容易绕过的那些**）：
+ *   - **每个 resolution 产一个**不可变 snapshot**（profiles + 用 profiles
+ *     建出的 `Models` 集合）**；一次操作在第一个 `await` 之前抓住整份
+ *     snapshot。配置改了**新建**一份 collection，**不** mutate 老的——
+ *     `Models.streamSimple()` 是 **lazy** 的，stream 第一次消费时才解析
+ *     provider，**这时 credential await 早已过去了**，mutation 会让
+ *     「请求在 A 配置下启动，credential 解析后 B 配置生效」这种诡异状态
+ *     出现。
+ *   - **这是「per-step freeze」语义能在 stream 层守住的根本**：
+ *     `llm.prepareCall()` 把 config 冻住，**整次 stream** 沿用同一份
+ *     snapshot；切换 model 永远在「下一步」生效，**不**会在 in-flight
+ *     stream 中间切。
+ *   - **凭据留在 collection 之外**：harness 解析 key 后作为请求的
+ *     `apiKey` 选项传给 pi-ai——pi-ai 把这当成「最高优先级 auth 覆盖」，
+ *     所以 `Models` 集合**永远不持凭据**，harness 端「fail-loud ref
+ *     语义」（`MISSING_CREDENTIAL` / `INVALID_CREDENTIAL`）不丢。
+ *
+ * 与其他模块的连接点：
+ *   - pi-ai 库的 `createModels` / `getSupportedThinkingLevels`
+ *   - `context.ts` 把 harness messages 翻成 pi-ai 形态
+ *   - `stream.ts` 把 pi-ai stream 翻成 harness `StreamChunk`
+ *   - `replay.ts` 处理「跨 provider 的 replay 降级」
+ *   - `dsh-llm` 的 `LlmAdapter` 抽象
+ *   - `dsh-attachment` 提供 durable image bytes
+ *   - `dsh-timeout` 提供 `idleWatchdog`（跟 `llm-deepseek` 同样的双信号
+ *     设计：caller signal ∪ consumer signal = upstream）
+ */
  *
  * Each resolution produces one **immutable** snapshot — the profiles plus a
  * `Models` collection holding the `Provider` each route built — and an

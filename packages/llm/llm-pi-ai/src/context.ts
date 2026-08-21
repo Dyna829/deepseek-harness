@@ -1,7 +1,27 @@
 /**
- * Harness request-history conversion into pi-ai's Context vocabulary.
+ * @file harness request history → pi-ai `Context` 翻。
  *
- * @module dsh-llm-pi-ai/context
+ * 关键设计点（**写代码容易写错的**）：
+ *   - **image 角色限制**：`assertSupportedImageRoles` 提前在 history 里
+ *     扫一遍——pi-ai **不能**在 user 之外的 role（assistant / tool）里
+ *     表达 image，但 harness 端**可以**（replay 路径上 tool message
+ *     嵌图是合法）。本文件不让这种 history 走到 pi-ai，在请求前就拒
+ *     掉——延后到 pi-ai 内部时它会自己丢图，**没人**知道是 history 还是
+ *     request 阶段漏的。
+ *   - **`flattenText` 跳过 `text === ''`**：空 text 块不推到 pi-ai 端，
+ *     避免它把 `""` 解释成「空 user content」歧义。
+ *   - **`toolResultText` 递归**——tool-result 内嵌 tool-result 也要展平。
+ *   - **`offloadRequestImages` 在最后再调**——durable message 不动，只
+ *     改 transient request 副本；session log 永远保留完整 image。
+ *   - **assistant 走 `toPiReplayState`**：replay 路径上 pi-ai 需要
+ *     它自己的 replay 形态，跨 provider 的不可信 replay 会在那里降级
+ *     成 provider-neutral。
+ *
+ * 与其他模块的连接点：
+ *   - `replay.ts` 的 `toPiAssistant` 翻译 assistant 消息
+ *   - `dsh-llm.contentHasImage` / `offloadRequestImages` 共用
+ *   - `dsh-attachment.AttachmentStore` 解析图 bytes
+ *   - 输出喂 pi-ai 的 `streamSimple`
  */
 
 import { CallId, contentHasImage, LlmError, offloadRequestImages } from '@deepseek-ai/dsh-llm'

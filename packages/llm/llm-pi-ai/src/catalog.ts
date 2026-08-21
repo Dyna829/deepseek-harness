@@ -1,9 +1,36 @@
 /**
- * Materialization of one provider route's model catalog. The installed pi-ai
- * catalog supplies defaults keyed by model id, and a profile's own model
- * entries override them field by field, so a route naming a catalog provider
- * stays configuration-free while a route pi-ai has never heard of is fully
- * describable from `settings.yaml`.
+ * @file pi-ai provider route 的 model catalog 物化。
+ *
+ * 核心策略：安装的 pi-ai catalog 充当**默认值**（按 model id 索引），profile
+ * 自己的 model 列表**逐字段**覆盖。所以：
+ *   - 命名 catalog provider 的 route **完全不用配 model**——用 pi-ai 自带的；
+ *   - pi-ai 没听过的 route **全靠 profile 描述**——settings yaml 就够。
+ *
+ * 关键设计点（写代码容易写错的）：
+ *   - **`MODALITY_GATE` 是 drift gate**：pi-ai 升级加 / 删 modality 时这个
+ *     `Record<PiAiModality, true>` **编译期**就 fail，命名哪个 key 漂了。
+ *     不写这条 gate，pi-ai 改了就**静默**缩窄「profile 能声明的 modality」。
+ *   - **「absent」和「empty」等价**：`MODALITIES` schema 把 absent 物化成 `[]`，
+ *     `[]` 描述「这个 model 什么都不收」（serve 不了任何 request），所以
+ *     「profile 命名 catalog model 但不声明 modalities」=「保留 catalog 的
+ *     modalities」= 默认 text + image。
+ *   - **`NO_COST` = 0/0/0/0**：harness **不**读 pi-ai 的 cost 元数据
+ *     （`replay.ts` 把它清零，没有任何 consumer 报告 spend）——所以
+ *     「no cost」就是「缺这一个事实」，**不**是可配置费率。
+ *   - **每个 pi-ai `Model` 字段 harness 无法默认的都在这里强制 required**——
+ *     「unserviceable route」在配置**解析期**就 fail，能命名出「是哪个
+ *     key 写错了」。延后到 request 时才发现会让错误信息变得「我请求失败
+ *     了」而不是「我配错了」。
+ *   - **`assertServiceable` 阻断了「合法 schema 但 plugin serve 不了」的
+ *     profile**——这是「under-claim vs over-claim」那条设计原则的具体执行。
+ *
+ * 与其他模块的连接点：
+ *   - pi-ai 库的 `builtinProviders` / `getBuiltinModels` / `getBuiltinProviders`
+ *     是默认值来源
+ *   - `config.ts` 的 `resolveRouteModels` 走这套物化
+ *   - `provider.ts` 的 `buildProvider` 拿物化结果拼 pi-ai 真实 `Provider`
+ *   - `replay.ts` 把 `NO_COST` 用到 replay payload 上
+ */
  *
  * Every pi-ai `Model` field the harness cannot default is required here rather
  * than at request time: an unserviceable route fails while its configuration is

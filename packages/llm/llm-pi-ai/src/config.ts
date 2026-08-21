@@ -1,7 +1,42 @@
 /**
- * Configuration schema and provider-profile validation for the pi-ai adapter.
- * Profiles are a dict keyed by provider route, so the composition base and a
- * user-settings layer merge per provider and the route set is structural.
+ * @file pi-ai adapter 的配置 schema + provider profile 校验。
+ *
+ * 核心 idea：profiles 是**按 provider route 索引的字典**，所以：
+ *   - 组合基础（cordis.yml entry config）和 user-settings layer **按 provider
+ *     merge**——一个 provider 的 key 在 settings 里覆盖，**不**影响其它 provider。
+ *   - route 集合是**结构性**的（`Object.keys`），加一个 profile ＝ 加一条
+ *     route，删一个 ＝ 删一条。
+ *
+ * 两种 route 走不同解析路径：
+ *   1. **catalog route**（名字命中 pi-ai 安装的 provider）—— endpoint /
+ *      protocol / display name / model catalog **从 pi-ai 继承**，profile
+ *      **逐字段**覆盖；
+ *   2. **hand-declared route**（pi-ai 没自带）—— profile **就是**整个 provider
+ *      声明，必须给 `api` / `baseURL` / `models`。
+ *
+ * 关键不变量：
+ *   - **`DEFAULT_INPUT = ['text']`**：model 既不声明也不在 catalog 里给能力时
+ *     默认 text-only——**under-claim 比 over-claim 安全**：under 让 image 在
+ *     附着前就拒，over 让 image 在持久化后才被 provider 拒（session 循环
+ *     卡死）。
+ *   - **`streamIdleTimeoutMs ≤ MAX_TIMER_DELAY_MS`**：Node setTimeout 大值
+ *     立即触发，绕过后端 idle 设计。
+ *   - **`maxRequestImageBytes` 默认 20 MiB**：4 张图（attachment store 默认
+ *     3.5 MiB raw × 4）base64 编码后大小，留出 system prompt / history / tools
+ *     容量。
+ *   - **`buildProvider` 一次决定所有请求事实**——a request never re-resolves
+ *     provider 形态。这条不变量让 in-flight stream 不会因为 settings 改
+ *     而 endpoint 漂移。
+ *   - **`assertServiceable` 在 settings 写入期拒「serve 不了」的 profile**：
+ *     防止「profile 存进去，运行期静默 disable 整个 namespace」。
+ *
+ * 与其他模块的连接点：
+ *   - `catalog.ts` 提供 pi-ai 内置 provider 形态 / supported protocols /
+ *     thinking 格式 / modality 集合
+ *   - `provider.ts` 的 `buildProvider` 把 profile 翻成 pi-ai 真实 `Provider`
+ *   - `dsh-llm` 提供 retry policy schema
+ *   - `dsh-credentials` 提供 `credentialRef`
+ */
  *
  * A route key is not required to name an installed pi-ai provider. When it does,
  * that provider's endpoint, protocol, display name, and model catalog are the

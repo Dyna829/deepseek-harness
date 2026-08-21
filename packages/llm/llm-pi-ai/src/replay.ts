@@ -1,5 +1,32 @@
 /**
- * Durable pi-ai replay metadata and assistant-history reconstruction.
+ * @file 持久化的 pi-ai replay 元数据 + assistant history 重建。
+ *
+ * 关键不变量（**写代码容易混淆的**）：
+ *   - **harness content 才是 source of truth**：text / tool call 等**业务
+ *     内容**从 harness 自己的 `ContentBlock` 来；本文件**只**存 pi-ai
+ *     私货——provider-native 签名 / response id / 推理 reasoning signature /
+ *     redacted thinking 块——这些是「让 pi-ai 在下一次请求时**认**回这是
+ *     它自己家产物」必需的信号。
+ *   - **`PiAiReplayResponse.kind = 'pi-ai'` + `version: 2`** 是结构版本
+ *     标签——将来 pi-ai 改 envelope 形态时**这里加 version**，老 replay
+ *     静默降级，不污染新版本的解析路径。
+ *   - **`parseArguments` 用 `{}` 兜底**：model 偶尔产出非对象形态的 tool
+ *     args（`null` / array / broken JSON），replay 走 `{}` 比抛错更
+ *     友好——agent loop 会再发一个 tool call 修。**不**默默吞原 error，
+ *     但**不**让 replay 失败阻塞整个 request。
+ *   - **`stopReason` 走 `AssistantMessage['stopReason']`**：pi-ai 自己
+ *     的 union type，没自己重定义——replay 时让 pi-ai 自己判 stop
+ *     reason 的语义。
+ *   - **跨 provider 的不可信 replay 降级**：在 `toPiAssistant` 路径上
+ *     调，provider / model 与当前配置不匹配时让 caller 把 assistant
+ *     消息**剥掉** replay state 当 provider-neutral 转发，避免「B
+ *     provider 解 A provider 的私货」。
+ *
+ * 与其他模块的连接点：
+ *   - `context.ts` 的 `toPiContext` 调 `toPiAssistant` 重建 history
+ *   - `stream.ts` 的 `toPiReplayState` 写入新 replay envelope
+ *   - `dsh-llm` 的 `ModelMessageSource.replayState` 存的就是这套 envelope
+ */
  *
  * Harness content remains the durable source for text and tool calls. This
  * module stores only the provider-native metadata needed to reconstruct a

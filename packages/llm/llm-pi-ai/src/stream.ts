@@ -1,5 +1,31 @@
 /**
- * pi-ai assistant event translation into the Harness streaming protocol.
+ * @file pi-ai assistant event → harness `StreamChunk` 翻译。
+ *
+ * 关键不变量（**写翻译代码容易踩的**）：
+ *   - **tool call arguments 形态差**：pi-ai 把 `arguments` 解析成**对象**，
+ *     harness 端保持**原始 JSON 字符串**——replay / 持久化 / cross-provider
+ *     都需要原始 JSON 形态（不同 provider / 不同 model 对同一 args 的
+ *     解析约定不一致，存对象等于锁死当前 provider 的解析）。所以本文件
+ *     反序列化**两次**：用对象形态喂 pi-ai 自己，存到 harness 端时再
+ *     `JSON.stringify` 回字符串。
+ *   - **pi-ai 把失败当 terminal stream event**（不是 throw）——本文件把它
+ *     翻成 harness 的 `finish: error` chunk，让下游 consumer 永远走统一
+ *     「finish 收尾」路径。
+ *   - **`mapUsage` 不输出零**：pi-ai 报 `0` 而不是 absent，harness 端
+ *     `TokenUsage` 把 0 当 absent 处理（`...usage.cacheRead > 0 ? ... : {}`），
+ *     让「这个 provider 真的没 cache」和「没报 cache」**不**混。
+ *   - **`classifyPiAiError` 是 pattern match 字符串**：pi-ai 把 caught
+ *     error flatten 成 `error.message`（**丢**了原 Error 和 `cause` 链），
+ *     undici 的可操作 transport 细节（`SocketError: other side closed`）
+ *     在 `cause` 上，**不**到我们这里。文档注释里写了 XXX：未来 pi-ai
+ *     转发原 Error 就改成基于 `code` / `cause` 的分类。
+ *
+ * 与其他模块的连接点：
+ *   - `replay.ts` 提供 `toPiReplayState`（harness assistant → pi-ai replay 形态）
+ *   - `context.ts` 处理入口（harness messages → pi-ai `Context`）
+ *   - `dsh-llm` 给出 harness `StreamChunk` / `FinishReason` / `TokenUsage` 词表
+ *   - 输出喂 `BlockAssembler`
+ */
  *
  * pi-ai tool-call arguments are parsed objects while the Harness keeps their
  * raw JSON representation. pi-ai also reports failures as terminal stream

@@ -1,6 +1,32 @@
 /**
- * Answering "which models can this provider serve?" for the configuration
- * surface's "fetch available models" action.
+ * @file 「这个 provider 能 serve 哪些 model」—— 给 settings 页面的
+ * 「fetch available models」按钮用。
+ *
+ * 关键设计（**不写代码就破的那种**）：
+ *   - **catalog route 不发网络请求**：pi-ai 自己的注册表就是它自家 provider
+ *     的权威列表，**且**带 listing 端点不披露的容量信息（context window /
+ *     max tokens）。我们**信**这个 list，不发请求去「再确认一遍」。
+ *   - **未 catalogued route（gateway / self-hosted）才发请求**。
+ *   - **本文件不存任何东西**：请求是用户在编辑的 draft，回复是 surface
+ *     「要不要采纳」的候选元数据。`settings.yaml` 才是「route serve 什么」
+ *     的唯一决定者——本模块是**只读**探测，**不是** catalog refresh。
+ *   - **只有 OpenAI-compat protocol 能被探测**：`openai-completions` /
+ *     `openai-responses` 两者有 `GET /models` listing 形态，gateway /
+ *     self-hosted / 官方端点都认。Azure（虽然 OpenAI 一脉）走 `api-key` 头
+ *     + `api-version` query；Codex 走 OAuth；其它 protocol 都不发请求、
+ *     告诉 surface「请手填」——**不**瞎猜一个回复形态然后报「provider 没
+ *     model」误导用户。
+ *   - **`MAX_RESPONSE_BYTES = 4 MiB`** 上界：用户自己输的 URL，我们**按
+ *     实际读到的字节**卡，不信 server 自报 length（同样的两段形态，
+ *     `dsh-web-fetch` 也这么干）。超限**直接拒**——`/models` listing 截断
+ *     不可解析。
+ *
+ * 与其他模块的连接点：
+ *   - `catalog.ts` 的 `catalogModels` 是 catalog route 的答案
+ *   - `dsh-llm` 的 `LlmDiscoveredModel` / `LlmModelDiscoveryRequest` 是返回 / 入参
+ *   - `dsh-llm.attributionHeaders` 必带
+ *   - 调用者是 settings surface 的「fetch available models」按钮
+ */
  *
  * A route the installed pi-ai catalog ships is answered **from that catalog**,
  * with no network call at all: pi-ai's registry is the authoritative list for

@@ -1,6 +1,36 @@
 /**
- * Construction of the pi-ai `Provider` that one configured route registers into
- * the adapter's `Models` collection.
+ * @file 把「一个已解析的 provider profile」翻成 pi-ai `Provider` 注册进
+ * `Models` 集合。
+ *
+ * 关键设计：两种构造路径，**一次决定**。
+ *   1. **catalog provider 复用**：profile 命中的 route 是 pi-ai catalog 自
+ *      带、profile **没有**覆盖 wire protocol——直接复用 catalog provider
+ *      （换 model 列表）。**不能**自己 rebuild：catalog provider 持有
+ *      `Bedrock` 这类通过独立 entry point 加载 Smithy 模块的 API 实现，
+ *      本包**没**有这些部分，自行重建等于「静默缩窄哪些 provider 能跑」。
+ *   2. **`createProvider` 全新构造**：其余情况——pi-ai 没听过的 route，或
+ *      catalog route 但 profile 改了 protocol——走 `PROTOCOLS` 表里的
+ *      工厂函数（`openai-completions` / `openai-responses` /
+ *      `anthropic-messages`）。
+ *
+ * 关键不变量：
+ *   - **凭据不进本模块存储**：harness 调 `ctx.credentials.resolve(ref)`
+ *     拿到 key，**作为 stream option** 交给 `Models`，由 pi-ai 内部
+ *     `resolve()` 拿去做最高优先级 auth 覆盖。本模块**永远不持**凭据。
+ *   - **`PROTOCOLS` 表故意做窄**：只列「hand-declared route 今天真用得
+ *     上」的三种 protocol，每种能用 (key, endpoint, headers) 完全描述。
+ *     Bedrock (SigV4 + AWS creds + region) / Vertex (project + location
+ *     + ADC) / Azure (provider env + api-version) / Codex (OAuth) 都没
+ *     法用本配置 shape 描述——加进表等于「交回一个永远 authenticate
+ *     不了的 provider」。catalog route 通过它自己的 provider 仍能走
+ *     全部 protocol，**只有**显式 override 被拒。
+ *
+ * 与其他模块的连接点：
+ *   - pi-ai 库的 `createProvider` + 三个 lazy-loaded API 实现
+ *   - `catalog.ts` 的 `catalogProvider` 给路径 1
+ *   - `adapter.ts` 在 `PiAiSnapshot.models` 上调它
+ *   - `config.ts` 的 `ResolvedPiAiProviderProfile` 是输入
+ */
  *
  * Two constructions, one decision: a route the installed catalog ships, whose
  * profile does not override the wire protocol, **reuses that catalog provider**

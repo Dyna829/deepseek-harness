@@ -1,13 +1,51 @@
 /**
- * Generic pi-ai-backed LLM adapter plugin. One plugin instance owns a dict of
- * provider routes; a route naming an installed pi-ai provider inherits that
- * provider's endpoint, protocol, and model catalog as defaults, and a route
- * pi-ai does not ship is declared outright. Profile facts resolve per request
- * over the optional `llm-pi-ai` user-settings section and the optional
- * credential seam, so a changed key, endpoint, model, or knob reaches the next
- * request without a restart; a changed *route set* (or a route's
- * registration-captured retry policy) re-registers the same adapter instance
- * in place.
+ * @file 通用 pi-ai-backed LLM adapter 插件入口。
+ *
+ * 与 `llm-deepseek` 的根本区别：**一个插件实例拥有多个 provider route**，
+ * 而 `llm-deepseek` 是「一插件一 provider」。
+ *
+ * 关键设计：
+ *   - **route 分两类**：
+ *     1. **catalog route**（名字命中 pi-ai 内置 catalog）—— endpoint /
+ *        protocol / model catalog **全部**继承 pi-ai 自己的，本配置只补
+ *        `apiKeyEnv` / `retryPolicy` / model 覆盖。
+ *     2. **hand-declared route**（名字 pi-ai 没自带）—— 必须显式给
+ *        `api` / `baseURL` / `models` / 可选 `compat`（覆盖 pi-ai 无法
+ *        识别的 URL 上的 reasoning 格式等）。
+ *   - **profile 解析按 request 走 settings section + 凭据 seam**：单 route
+ *     改 key / 改 endpoint / 改 model 都无需重启；in-flight stream 仍持它
+ *     启动时那份 snapshot。
+ *   - **registration-captured 事实（route 集合 + 每 route 的 retry policy）
+ *     改了就 `replace(routes)` 同步 swap**，**不**走「dispose + 重新注册」——
+ *     后者会在两步之间暴露空 route 集合给观察者。
+ *   - **目录 vs 注册两套事实**：`ensureDirectory`（configurable-provider
+ *     directory）跟随 profiles，但**不**是同一个 `replace`——目录是「这个
+ *     plugin 暴露的所有可配置 route」，注册是「这个 plugin 当前实际 serve
+ *     的 route」。一个 refused 的目录 swap 不影响 routes，一个 refused 的
+ *     registration swap 不影响目录。
+ *   - **`assertServiceable` 在写入时拒绝「plugin serve 不了」的 profile**：
+ *     避免「profile 存进去了、运行时静默 disable 整个 namespace」。
+ *
+ * 关键不变量：
+ *   - **「named route 但没 key」是 fail loud**（不丢给 pi-ai 的 ambient
+ *     discovery）——否则 `OPENAI_API_KEY` 这种环境变量会**默默**被一个
+ *     想用自己的 `ACME_GATEWAY_API_KEY` 的部署「借用」，账单到错租户。
+ *   - **目录里 `declared: !catalog.has(provider)`**——membership 看的是
+ *     pi-ai 安装了什么，**不**是 settings 里写了什么；narrowed catalog
+ *     route 还是 catalog route。
+ *   - **dormant bare mount 合法**：初始 0 route **不**调 `registerAdapter`，
+ *     settings 写第一条 profile 才挂。
+ *
+ * 与其他模块的连接点：
+ *   - `PiAiAdapter`（同包）执行真实流
+ *   - `config.ts` 把 raw `Config` 解析成 `ResolvedPiAiProviderProfile`
+ *   - `catalog.ts` 提供 pi-ai 内置 provider id
+ *   - `provider.ts` 解析 OpenAI-compat / Anthropic / 等协议的 url 形态
+ *   - `discovery.ts` 在 settings 探测里给新 URL 探测 model
+ *   - `replay.ts` 处理跨 provider replay 的降级
+ *   - `dsh-llm` 的 `LlmRuntime` 提供 register / replace / 目录
+ *   - `dsh-settings` 提供 HMR
+ */
  *
  * ```yaml
  * - id: llm
