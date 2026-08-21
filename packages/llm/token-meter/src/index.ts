@@ -1,5 +1,49 @@
 /**
- * Single replay-aware token-meter service for request and surface pressure.
+ * @file `ctx.tokenMeter` 的本体：单一 replay-aware token 计量服务。
+ *
+ * 两条「产品事实在哪」的设计：
+ *   - **Request pressure** = 「provider 这一步实际用掉的 token」优先
+ *     (`TokenUsage`)；只在没有 anchor 时退到 `estimateHeader` + 表面
+ *     token 的 heuristic 估算。
+ *   - **Surface pressure** = 「当前 session 表面上挂的 token 树」，永远
+ *     heuristic 算（`foldSurfaceTokens`），跟 request header **无关**。
+ *   - **「anchor」是 request / surface 的对账点**：每条 `assistant/message`
+ *     落盘时记一个 `MeasurementAnchor`（`header` + `surface tokens` +
+ *     `baseline`），之后 `measure()` 时如果 header 没变且 surface 增量
+ *     ≥0，直接复用 anchor；否则 reprice。这就是「provider 报的 usage
+ *     在我们心里是**真的**，heuristic 估算的要在它觉得不对的时候让位」。
+ *
+ * 关键不变量（写代码容易绕过的）：
+ *   - **`usageTokens` 加 disjoint 桶**：`inputTokens + cacheRead + cacheWrite
+ *     + outputTokens`——这三个 cache / output 桶互不交，**不**会因为某个
+ *     provider 把 reasoning 折进 output 算两遍。
+ *   - **「Step 必须 open + assistant 必须挂在它之上」**：`_foldEvent` 在
+ *     `step/start` / `step/end` / `assistant/message` 三处都用同一套
+ *     「state.stepStart 必须存在且与 event 对得上」的检查。**先**算齐
+ *     这些不变量，**再**开始 mutate state（`nextHeader` / `nextStepStart`
+ *     / `nextAnchor` 局部变量在 switch 跑完才赋给 state）——一次折叠失败
+ *     不会留半改的 state。
+ *   - **`sourceEventSeqs` 拼 provider 真输出**：当 `assistant/message` 自带
+ *     `usage` 时，本服务**不**信 `durableEventTokens`（durable 是「最后
+ *     一次 append 时算的」），而是从 `sourceEventSeqs` 引用的 `assistant/chunk`
+ *     **自己**走一遍 `BlockAssembler` + `estimateContent`——**和 provider
+ *     实际吐的内容一致**。`sourceSeqs === undefined` 时（legacy 数据）
+ *     才退到 `durableEventTokens` 兜底。
+ *   - **Provider usage 必须 ≥ 估算 anchor** 才采纳 `kind: 'usage'`：避免
+ *     「provider 报的比 heuristic 还少」导致下游压力读数变小（`usage` 应该是
+ *     **下界**）。达不到就降级为 `kind: 'estimated'`。
+ *   - **`measure()` 返回 deep-frozen 副本**——压力读数是「诊断观察」，**不**
+ *     能被消费方持有后改 state.surface。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-llm.BlockAssembler` 复拼 provider 真实 chunk
+ *   - `dsh-llm.deepFreeze` 冻结返回值
+ *   - `dsh-session` 的 `Session` / `SessionEvent` / `isSurfaceEvent` 提供 log
+ *   - `dsh-session-projection` 是可选 child，装着三个 projection definition
+ *   - `estimate.ts` / `surface-fold.ts` 提供纯函数估算
+ *   - `usage-projection.ts` / `breakdown-projection.ts` / `contextPressureProjection`
+ *     在有 registry 的 composition 里被注册
+ */
  *
  * @module @deepseek-ai/dsh-token-meter
  */

@@ -1,5 +1,37 @@
 /**
- * Pure folds for durable provider-reported token usage and context occupancy.
+ * @file 持久化 provider token usage + context occupancy 的纯 fold。
+ *
+ * 两个 projection definition：
+ *   1. **`tokenUsageProjectionDefinition`**：累加 provider 报的 usage 到
+ *      整个 session log。**关键**：
+ *      - usage chunk 给**早**样本，assistant/message 给**终**样本；
+ *      - 「同 turn / 同 step 重复 sample」**替换**那一步的旧值，**不**累加
+ *        ——「同一步报两次」是 log 里**合法**的（chunk + final）；
+ *      - `last` 槽位能正确去重依赖 session log 不变量：同 turn/step 的 usage
+ *        report 在 log 里**相邻**，下一个 step 开始后**不会**回头给旧 step
+ *        报。
+ *   2. **`contextPressureProjectionDefinition`**：状态栏的 context pressure。
+ *      **关键**：
+ *      - 「`pressureTokens` ≠ `projectedTokens`」是**有意**的：`pressureTokens`
+ *        是 provider 报的瞬间 prompt 边，hold still while streaming；`projectedTokens`
+ *        = `pressureTokens` + **自那之后** surface 的 signed 移动。
+ *      - 「切 model 时 capacity 新了但 usage 还没来」是**有意**的妥协——给
+ *        用户看，不是给 billing / gating 用。
+ *      - **Usage sample 必须在同 event 加入 surface 之前**打上
+ *        `sampledSurfaceTokens`——`assistant/message` 锚在「它自己的 request
+ *        看到的 surface」上，**不**是「现在的 surface」（compaction 在
+ *        assistant 之间可能就插队了）。
+ *      - O(1) 状态——`surfaceTokens` 走 `foldSurfaceProjection` 的 shadow
+ *        price 协议，**不**用本包的 O(surface) fold。
+ *      - 「replacement 没 claim」= 保留原 total（不抹掉之前的 surface 价）。
+ *
+ * 与其他模块的连接点：
+ *   - `surface-projection.ts` 的 `foldSurfaceProjection` 是 O(1) surface fold
+ *   - `projection.ts` 提供类型 / 选择位
+ *   - `dsh-llm.TokenUsage` 是入参 schema
+ *   - `dsh-session-projection` 的 `ProjectionDefinition` 是接口
+ *   - `dsh-session` 的 `SessionEvent` 提供 input
+ *   - 在 `index.ts` 的 `ctx.sessionProjections.register` 路径上挂上
  */
 
 import { z } from 'zod'

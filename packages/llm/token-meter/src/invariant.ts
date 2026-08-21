@@ -1,6 +1,19 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-token-meter`.
- * @module @deepseek-ai/dsh-token-meter/invariant
+ * @file `dsh-token-meter` 的 invariant companion 入口。
+ *
+ * 本包**没有**运行时挂的不变量——
+ *   - token 估值是**单次**输出，private session cache 在 event 变更边界
+ *     自动 invalidate；
+ *   - 三个 projection 的 schema（zod）已经把 JSON 形状钉死，**结构**不变量
+ *     走 schema 验证；
+ *   - usage fold 替换同 step 样本，所以 totals 在「final 样本修正早期
+ *     chunk」时**故意**不单调——这条不是 bug，是设计；
+ *   - composition projection 的 message 数字 == `measure().surfaceTokens`
+ *     **by construction**（共用 `estimate.ts` + producer-logged shadow price
+ *     来自 `TokenMeter` 自己的 nodes），不是**runtime 守**的关系。
+ *
+ * `install` 留作未来挂「`sessionProjections.register` 三件套必须都装上」
+ * 之类**装配期**不变量时的占位。
  */
 
 /* jscpd:ignore-start */

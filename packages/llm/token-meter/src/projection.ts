@@ -1,5 +1,31 @@
 /**
- * Pure client-safe token-projection vocabulary.
+ * @file 纯 client-safe 的 token projection 词表。
+ *
+ * 三个 projection 配套使用，但**关注点不同**：
+ *   - **`TokenUsageProjection`**：**累加**到整个 session log 的 provider
+ *     报 usage；四个 disjoint 桶（**特别** `outputTokens` 已含 reasoning，
+ *     不再累一遍）。
+ *   - **`ContextPressureProjection`**：状态栏的「context 还剩多少」——
+ *     **`pressureTokens` ≠ `projectedTokens`**，前者是「最近一次 provider
+ *     报的 prompt 大小」，后者是「pressure + 自那之后的 surface 启发式
+ *     reprice」。「切 model 时 capacity 新了但 usage 还没来」是个**有意的**
+ *     妥协——这是给用户看的参考，不是 billing / gating 的输入。
+ *   - **`ContextBreakdownProjection`**：启发式**组成**拆解（system / tools /
+ *     message），**不**是总 token。estimator 系统性**低估** CJK 文本 / JSON
+ *     schema，所以三个数加起**来不会**等于 `projectedTokens`——这条**故意**
+ *     留下的偏差由 `projectedTokens` 锚定 provider usage 来兜住。
+ *
+ * 选位通过 `declare module '@deepseek-ai/dsh-session-projection/types'` 接
+ * `SessionProjectionMap`——任何拿到 `ctx.sessionProjections` 的 composition
+ * 都能订阅这三个 projection。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-llm.TokenUsage` 字段语义沿用
+ *   - `dsh-session-projection/types` 的 `SessionProjectionMap` 选择位
+ *   - `usage-projection.ts` / `breakdown-projection.ts` 实现这三个
+ *     projection 的 fold
+ *   - 任何能调 `ctx.sessionProjections` 的 plugin 都能读
+ */
  *
  * @module @deepseek-ai/dsh-token-meter/projection
  */

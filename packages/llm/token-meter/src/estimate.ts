@@ -1,7 +1,32 @@
 /**
- * Fixed-density heuristic token pricing shared by the meter service and the
- * pure context-breakdown projection, so both surfaces price identical content
- * to identical numbers.
+ * @file 固定密度 heuristic token 定价，被 meter service 和 context-breakdown
+ * projection **共用**——这样两处 surface 算「同一段 content」永远算成
+ * 「同一个数字」。
+ *
+ * 关键设计点（**写代码容易绕过的**）：
+ *   - **不调真实 tokenizer**：固定 `CHARS_PER_TOKEN = 4` + 每 block
+ *     `BLOCK_OVERHEAD = 4`（JSON framing / type tag）+ 每 message
+ *     `ROLE_OVERHEAD = 4`（role 字段）。**任何** 跟具体 model tokenizer
+ *     走都会让 meter 和 projection 给出**不同**数字（不同 provider / 不同
+ *     模型的 tokenizer 不一样），破坏「两处对账」的不变量。
+ *   - **递归 `tool-result`**：tool-result 内嵌 content 递归调用
+ *     `estimateContent`——meter 和 projection **必须**看到同一棵子树。
+ *   - **未知 block 走 `JSON.stringify` 兜底**：`ContentBlockMap` 是
+ *     declaration-merged union，下游插件加新变体是合法的（见
+ *     `dsh-llm/types.ts` 的 `MappableMappedInterface` 设计）；本文件
+ *     不在 switch 里 `assertNever`，而是「`JSON.stringify` 整个 block
+ *     按 char 数算 + 基础 overhead」——保证任何**合法**的 block 都拿得到
+ *     估值，**不**会因为新变体让 meter 算 0 误导。
+ *   - **`estimateSystemTokens` / `estimateToolsTokens` 都按 `0` 兜底**：
+ *     `header === undefined` / 字段 absent 时返回 0，**不**抛——meter
+ *     在「还没有任何 request」时调用也合法。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-llm.ContentBlock` / `Message` 是输入
+ *   - `dsh-session.EpochHeader` 是 `estimateHeader` 输入
+ *   - `index.ts` 的 `TokenMeter` 在 anchor 缺失路径上调 `estimateHeader`
+ *   - `breakdown-projection.ts` 的 projection 调同一套 `estimateContent`
+ */
  *
  * @module @deepseek-ai/dsh-token-meter/estimate
  */

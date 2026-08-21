@@ -1,5 +1,40 @@
 /**
- * The O(1) surface-token fold shared by the token-meter projection units.
+ * @file token-meter projection 单元共用的 **O(1)** surface-token fold。
+ *
+ * 关键设计（**写代码容易绕过的**）：
+ *   - **「projection state 必须 bounded」**：持久化的 projection cache
+ *     **整**存 unit state，**不**存 priced surface（`TokenMeter` 那种
+ *     O(surface) 的节点列表）——因为那会让 checkpoint 随 session 寿命
+ *     无限增长。所以**这**是 O(1) 的 fold。
+ *   - **Shadow-price 协议**：replacement（`compaction/summary` /
+ *     `compaction/prune`）**不**自己估被替换的 range；它前面的 metering
+ *     event 把这个 range 的启发式 token 价**直接**写进 event。fold
+ *     只保留一个 running total + 至多一个 pending claim，**永远不**留
+ *     per-node 价。
+ *   - **数字 exact by construction**：shadow-price producer 跟本模块
+ *     **同**用 `./estimate.ts` 的固定 estimator——所以 fold 的 running
+ *     total 在每条 event 边界上**等于** `measure().surfaceTokens`。
+ *   - **「Claim 只能活一条 event」**：`compaction/*` event arm 一个 claim，
+ *     **紧跟的** surface event 必须**消费**它。任何中间插队（非 shadow
+ *     event / 不消费 claim）就让 claim 过期——producers 必须**同步相邻**
+ *     写 shadow event 和 replacement。
+ *   - **「Replacement 没 armed claim」= zero delta**：bounded state 算不
+ *     出被替换 range 的价，**折中**保 replay 不挂（**代价**是数字漂）。
+ *     这种情况只在**老 log**（shadow-price 协议**之前**录的）出现，
+ *     新 session 不会有。
+ *   - **「Claim 范围对不上 replace 范围」= throw**：这是**活的** producer
+ *     在违反 shadow-price 合同——**不**是历史数据，**必须** fail loud，
+ *     **不**让 total 漂。
+ *
+ * 与其他模块的连接点：
+ *   - `estimate.ts.estimateMessage` 共用
+ *   - `dsh-session.deriveEventMessage` 抽 surface event message
+ *   - `dsh-session.isSurfaceEvent` 判 surface event
+ *   - `dsh-compaction` 提供 `compaction/summary` / `compaction/prune` 事件
+ *   - `usage-projection.ts` / `breakdown-projection.ts` 的 fold **共享**本模块
+ *   - `index.ts` 的 `TokenMeter` **不**用本 fold（它走 `surface-fold.ts` 的
+ *     O(surface) fold）——但**两套**数字必须对账
+ */
  *
  * A projection state must stay bounded — the persisted projection cache
  * checkpoints every unit's whole state, so carrying the priced surface

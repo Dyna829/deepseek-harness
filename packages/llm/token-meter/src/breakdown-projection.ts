@@ -1,8 +1,33 @@
 /**
- * Pure fold for the heuristic context-composition projection: system prompt
- * and tool schemas from the newest request envelope, conversation from the
- * live surface. Prices with the same shared estimator as the meter service,
- * so the three figures match `measure()`'s heuristic vocabulary exactly.
+ * @file 启发式「context 组成」projection 的纯 fold。
+ *
+ * 三个数字（system / tools / message）从**不同来源**取：
+ *   - **system / tools**：**last-wins** per `request/header`——「最近一次
+ *     request envelope」上的 system prompt 和 tool schema 估价。
+ *   - **message**：走 `foldSurfaceProjection`（**和** context-pressure
+ *     projection **用同一个 O(1) fold**）——完全 metered 的 log 在每条
+ *     event 边界上 `messageTokens === measure().surfaceTokens`。
+ *
+ * 关键不变量：
+ *   - **Estimator 共用**：`estimateSystemTokens` / `estimateToolsTokens`
+ *     从 `./estimate.ts` 直接拿，**和** `TokenMeter` 走的是同一套
+ *     `CHARS_PER_TOKEN` / `ROLE_OVERHEAD` 常量。projection 数字**不会**
+ *     跟 `measure()` 数字漂。
+ *   - **`stateVersion: 2`**：持久化 checkpoint 的 schema 版本。改 state
+ *     shape 时**必须** bump 数字，老的 persisted state 走迁移或丢弃。
+ *   - **「replacement 没 claim」= 保留 message 总价**：跟 context-pressure
+ *     projection 的语义一致——compaction 没记 shadow 价就别无端抹掉。
+ *   - **`messageTokens + systemTokens + toolsTokens` ≠ provider 报 total**：
+ *     estimator 系统性低估 CJK / JSON schema，**故意**留下的偏差由
+ *     `projectedTokens` 锚定 provider 兜住。
+ *
+ * 与其他模块的连接点：
+ *   - `surface-projection.ts` 的 `foldSurfaceProjection`（O(1) fold）
+ *   - `estimate.ts` 的 `estimateSystemTokens` / `estimateToolsTokens`
+ *   - `dsh-session.canonicalHeader` 拿规范化 envelope
+ *   - `dsh-session-projection.ProjectionDefinition` 是接口
+ *   - `projection.ts` 的 `SessionProjectionMap` 选择位（通过 `declare module` 接入）
+ *   - `index.ts` 的 `ctx.sessionProjections.register` 挂上
  */
 
 import { z } from 'zod'
