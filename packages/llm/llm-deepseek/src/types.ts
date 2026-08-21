@@ -1,12 +1,32 @@
 /**
- * DeepSeek chat-completions wire format (OpenAI-compatible). Types only.
+ * @file DeepSeek chat-completions wire 格式（OpenAI 兼容）— 只放类型。
  *
- * Source of truth: the official API docs at
- * `~/repos/deepsuite-docs/apps/docs/docs` (api/create-chat-completion,
- * guides/thinking_mode.mdx, guides/tool_calls.md), cross-checked against
- * live streams from the internal endpoint (2026-06).
+ * 关键观察（容易踩的坑）：
+ *   - **`thinking` 在 wire 顶层**，**不**是 `extra_body` 里的字段——这条
+ *     跟 OpenAI 习惯不同，写代码时容易按 OpenAI SDK 的样子塞错地方。
+ *   - **`reasoning_effort` 是 `low/high/max` 三个**（**不**含 `off`）——
+ *     `off` 在 harness 端是「reasoning 关掉」的语义，本文件**不**给 `off`
+ *     一个 wire 表示；`serialize.ts` 把 `off` 翻成 `thinking: 'disabled'`。
+ *   - **assistant content `""` vs `null`**：纯 tool-call 的回合发 `""`，
+ *     因为某些 gateway 拒 `null`；**完全**没 text / tool call 的回合才发
+ *     `null`。
+ *   - **reasoning_content 是「thinking 模式下 tool call turn 的必填」**：
+ *     DeepSeek 自己虽然忽略（直接生成 tool call），但下游 gateway 把这
+ *     段 history re-encode 给其它 provider 时会需要这个字段来恢复思考
+ *     签名。所以**有** reasoning 的 assistant 回合必须 passback。
+ *   - **`prompt_tokens` 含 cache hit**（`prompt_cache_hit_tokens +
+ *     prompt_cache_miss_tokens`），与 harness 端「不相交计数」惯例不
+ *     一致——`translate.mapUsage` 负责减掉。
+ *   - **`prompt_tokens_details.cached_tokens` 是 OpenAI-compat 写法**，
+ *     `prompt_cache_hit_tokens` 是 DeepSeek 自家写法；`mapUsage` 两个
+ *     都认。
  *
- * @module dsh-llm-deepseek/types
+ * 与其他模块的连接点：
+ *   - `serialize.ts` 读这个请求 wire 类型
+ *   - `translate.ts` 读 `WireChunk` / `WireUsage`
+ *   - `adapter.ts` 用 `WireError` 解非 2xx 响应体
+ *   - 任何新加进来的 provider 字段都先来这里加类型，再让 `serialize` /
+ *     `translate` 引用
  */
 
 /** Request body for `POST {baseURL}/chat/completions`. */

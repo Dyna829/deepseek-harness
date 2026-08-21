@@ -1,14 +1,36 @@
 /**
- * Register a {@link DeepSeekAdapter} for the `deepseek-official` provider route on
- * `ctx.llm`, with connection facts resolved per request instead of frozen at
- * load: the plugin layers its `cordis.yml` entry config under the optional
- * `llm-deepseek` user-settings section (`ctx.settings`) and resolves the API
- * key through the optional credential seam (`ctx.credentials`), so a changed
- * base URL, catalog, or key reaches the very next request without restarting
- * anything, while an in-flight stream keeps the facts it started with. The
- * one registration-captured fact — the retry policy — re-registers the route
- * in place when it changes.
- * @module @deepseek-ai/dsh-llm-deepseek
+ * @file `deepseek-official` provider route 在 `ctx.llm` 上的注册入口。
+ *
+ * 关键设计：**连接事实按 request 解析，而不是 load 时一次性冻结**。
+ *   - `cordis.yml` entry config 提供初始配置；用户/部署通过 `llm-deepseek`
+ *     settings section 改（`installSettingsSection`），改完立刻生效到「下一个
+ *     request」；in-flight stream 仍持它启动时拿到的那份事实，不会中途换
+ *     端点/换 key。
+ *   - API key 走 credentials seam（`ctx.credentials.resolve(ref)`）；没有
+ *     seam 时退到 ambient env。**credential 和 endpoint 绑成同一个 snapshot**
+ *     解析——拒掉一个 generation 时整个上一代都保留，新旧 key 不会跟新旧
+ *     endpoint 错配。
+ *   - **唯一**注册期捕获的事实是 retry policy。policy 改了就调
+ *     `registration.replace([PROVIDER])` 同步 swap，**不**走「dispose +
+ *     重新注册」——后者在两步之间会暴露一个空 route 集合给观察者。
+ *
+ * 关键不变量：
+ *   - **`lastGood` 兜底**：settings 改坏了（schema 外 bound）时**不**抛，
+ *     保留上一代好配置继续 serve，且打一行 error 日志；只在「**从未**成功
+ *     解析过」时才让失败冒到 boot。
+ *   - **`thinking: 'disabled'` 时只接受 `reasoningEffort: 'off'`**——这条组合
+ *     在 provider 端会矛盾；提前在配置解析期 fail loud。
+ *   - **`streamIdleTimeoutMs ≤ MAX_TIMER_DELAY_MS`**——Node setTimeout 在
+ *     大值上立刻触发，绕过后端 idle 兜底设计。
+ *
+ * 与其他模块的连接点：
+ *   - `DeepSeekAdapter`（同包）实现真实的 SSE + 协议翻
+ *   - `dsh-llm` `LlmRuntime.registerAdapter` / `registerConfigurableProviders`
+ *     是本插件的挂载点
+ *   - `dsh-settings` 提供 `installSettingsSection`（HMR）
+ *   - `dsh-credentials` 提供 `credentials.resolve`（可选）
+ *   - `dsh-launch-environment` 给出 `$DEEPSEEK_BASE_URL` 等环境来源
+ *   - `dsh-anonymous-user-id` 提供稳定的 anonymous user id
  */
 
 import type { Context } from '@deepseek-ai/cordis'

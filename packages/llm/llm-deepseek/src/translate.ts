@@ -1,11 +1,33 @@
 /**
- * Translate DeepSeek SSE payloads with one stateful harness block per content, reasoning, or tool
- * call index. An empty initial reasoning delta does not open a block. Finish reason and the latest
- * usage are deferred until `[DONE]`, covering both finish-attached and trailing usage-only shapes
- * while ensuring no chunk follows `finish`.
+ * @file DeepSeek wire chunks → harness `StreamChunk` 翻译。
  *
- * Translate DeepSeek wire chunks into the harness `StreamChunk` protocol.
- * @module dsh-llm-deepseek/translate
+ * 关键设计（**写代码时容易写错的那些**）：
+ *   - **reasoning 必须在 text 之前判**：`thinking` 模式下 reasoning content
+ *     出现在 text 之前；空字符串 reasoning delta **不**开 block（`=== ''` 就
+ *     跳过 open），不然就出现「空 reasoning block-start → block-end」的废块。
+ *   - **finish / usage / block-end 全部 deferred 到 `[DONE]`**：
+ *     provider 可能把 usage 塞在 finish chunk 里，也可能单独再发一个
+ *     usage-only trailing chunk；本文件**只保留最新一份** + 推迟 emit，让
+ *     下游 invariant 看到「no chunk follows finish」。
+ *   - **`mapUsage` 减掉 cache hit**：DeepSeek wire 的 `prompt_tokens` 包含
+ *     cache hits；harness 端 `TokenUsage` 是**不相交**计数（`inputTokens`
+ *     不含 cache reads），所以 `inputTokens = prompt_tokens - cacheRead`，
+ *     `cacheReadTokens` 单列。
+ *   - **`stop` + 0 block 翻成 `EMPTY_RESPONSE` error**：provider 偶尔发
+ *     「正常完成但 0 个 block」的退化响应；不让它伪装成「成功空消息」——
+ *     用户或 loop 看到「0 输出」会以为是网络问题。`EMPTY_RESPONSE` 是
+ *     retry-safe 的，所以这条不消耗一次 retry 配额。
+ *   - **`mapFinishReason` 未知 reason 翻成 error**：未来 provider 加新 reason
+ *     （`content_filter` 等）我们**不**静默 swallow——给一个 `{ kind: 'error',
+ *     code: UPPERCASE }`，UI / retry policy 看得见。
+ *   - **JSON parse 失败 → `MALFORMED_RESPONSE`**：截 120 字符吐到 message
+ *     够诊断但不暴露整段 payload（payload 可能含 user content）。
+ *
+ * 与其他模块的连接点：
+ *   - 吃 `sse.ts` 的 `parseSse` 输出
+ *   - 喂 `BlockAssembler`（`dsh-llm/assembler`），所以输出的 `StreamChunk`
+ *     严格守 `dsh-llm/invariant` 的 grammar
+ *   - `types.ts` 定义 wire 形态
  */
 
 import { CallId, EMPTY_RESPONSE_CODE, LlmError } from '@deepseek-ai/dsh-llm'

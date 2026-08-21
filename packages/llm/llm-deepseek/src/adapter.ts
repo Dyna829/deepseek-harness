@@ -1,11 +1,38 @@
 /**
- * `DeepSeekAdapter`: fetch + SSE against a DeepSeek (OpenAI-compatible)
- * chat-completions endpoint, emitting harness StreamChunks. The adapter is
- * transport-only: connection facts arrive through a thunk resolved once per
- * operation and the bearer token through a per-request resolver, so the
- * registering plugin owns validation, layering, and credential policy.
+ * @file `DeepSeekAdapter`：fetch + SSE against DeepSeek (OpenAI 兼容)
+ * chat-completions 端点，吐 harness `StreamChunk`。
  *
- * @module dsh-llm-deepseek/adapter
+ * 设计定位：**transport-only**。adapter 本身**不**做连接 / 凭据策略：
+ *   - 连接事实通过 thunk `options()` 解析——**一次操作**调一次，**不**
+ *     在 load 时冻结；
+ *   - bearer token 通过 `resolveApiKey(connection)` 解析——**和 endpoint 来自
+ *     同一个 snapshot**，保证「同一次请求的 key 和 URL 永远来自同一代
+ *     配置」，新 key 不会和旧 endpoint 配对；
+ *   - 注册插件（`index.ts`）独占 validation / layering / 凭据策略。
+ *
+ * 关键不变量：
+ *   - **in-flight stream 锁定启动时的 snapshot**：调用 `options()` 一次得到
+ *     connection、调用 `resolveApiKey(connection)` 一次得到 key——这两者绑死
+ *     整次 stream，**不**再读 `options()`。中途改 settings 不会影响正在跑的
+ *     stream，只影响**下一个** request。
+ *   - **AbortSignal 双绑**：`options.signal`（caller 取消）∪ `consumer.signal`
+ *     （adapter 内部消费方主动停）= `upstream`；idle watchdog 跟着 `upstream`
+ *     跑。任一边触发，watchdog 都会调 `consumer.abort(...)` 关掉底层 fetch。
+ *   - **未 catalogued model 默认 text-only**：`resolveModel` 找不到 model
+ *     时**不**冒险宣称 image 能力——「假装支持，下次真发 image 才被 provider
+ *     拒」会污染 session log。text-only 是「肯定能」的安全默认。
+ *   - **HTTP 状态 → stable code 映射**：`401/403 → AUTH`、`429 → RATE_LIMIT`、
+ *     `400 + context window message → CONTEXT_WINDOW_EXCEEDED`、`5xx →
+ *     SERVER`、其它 → `HTTP_<status>`。这条映射是「**retry policy 用得动**」
+ *     的前提。
+ *
+ * 与其他模块的连接点：
+ *   - `serialize.ts` 把 harness messages 翻成 OpenAI wire 格式
+ *   - `sse.ts` 解 `text/event-stream`
+ *   - `translate.ts` 把 wire delta 翻成 `StreamChunk`
+ *   - `types.ts` 定义 wire 错误形态
+ *   - `dsh-attachment` 提供 durable image bytes
+ *   - `dsh-timeout` 提供 `idleWatchdog`
  */
 
 import { attributionHeaders, contentHasImage, CONTEXT_WINDOW_EXCEEDED_CODE, isContextWindowExceededError, isQuotaExceededError, LlmAdapter, LlmError, ProviderRequestId, QUOTA_EXCEEDED_CODE, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -167,6 +194,16 @@ export function httpErrorCode(status: number, error?: WireError['error']): strin
  *
  * One stable signal reaches both initial fetch and body reads. Caller aborts
  * map to `ABORTED`; the configured per-read idle watchdog maps to `TIMEOUT`.
+ *
+ * @description 中文说明：
+ *   `LlmAdapter` 的**第一个**真实实现。具体负责：
+ *     1. 端点决定（`baseURL`）+ 凭据解析（`apiKeyEnv`）绑成一份 snapshot，
+ *        通过 `options()` thunk 拿；`stream()` 调一次后整次请求都用它
+ *     2. 错误状态码统一映射到 harness 稳定 code（AUTH / RATE_LIMIT / CONTEXT
+ *        WINDOW EXCEEDED / QUOTA / SERVER / HTTP_<n>），让 retry policy 和
+ *        UI 路由都基于这套 code 而不是 HTTP 数字
+ *     3. 图像能力 gate——未 catalogued model 强制 text-only，不替它「猜」图像支持
+ *     4. 复用 `dsh-timeout` 的 `idleWatchdog` 守 SSE 读空闲超限
  */
 export class DeepSeekAdapter extends LlmAdapter {
   constructor(private readonly config: DeepSeekAdapterOptions) {

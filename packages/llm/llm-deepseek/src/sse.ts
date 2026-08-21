@@ -1,14 +1,29 @@
 /**
- * Decode an SSE byte stream into event `data` payloads. Framing — chunk
- * reassembly, UTF-8/CRLF/BOM handling, comment and non-data field skipping,
- * multi-`data:` joining — is `eventsource-parser`'s. Comments are reported
- * only through an optional transport-activity callback. This module keeps the
- * DeepSeek protocol: the literal `[DONE]` is yielded so the caller owns final
- * flushing, and EOF before it raises {@link LlmError}. Framing is spec-strict:
- * an event dispatches only on its blank-line terminator, so an unterminated
- * tail at EOF is truncation, not a flushable payload.
+ * @file SSE 字节流 → event `data` 字符串 payload。
  *
- * @module dsh-llm-deepseek/sse
+ * 框架层（chunk 重组、UTF-8 / CRLF / BOM 处理、comment 跳过、多 `data:` 拼接）
+ * 全交给 `eventsource-parser`——本文件**只**守 DeepSeek 协议的那一点点：
+ *   - **literal `[DONE]` 当 sentinel 让 caller 拥有最后 flush 时机**——
+ *     `translate` 看到 `[DONE]` 才 emit `block-end` / `usage` / `finish`。
+ *   - **EOF 之前没收到 `[DONE]` 抛 `STREAM_CLOSED`**：truncated response
+ *     不可信，**不**伪装成「正常结束」。下游 retry policy 看到
+ *     `STREAM_CLOSED` 会选择重试。
+ *   - **comment 不进 payload 流**：SSE 注释是「keep-alive」之类的运营商
+ *     信号，通过 `onComment` 回调上抛给 idle watchdog 当作「transport
+ *     活跃」证据——但**不**污染逻辑 payload。
+ *
+ * 关键不变量（来自 SSE 规范本身）：
+ *   - event **只在 blank-line terminator 处** dispatch——未终止的尾巴
+ *     算「截断」，**不**算「可 flush 的 payload」。
+ *   - read 可以从**任意**字节边界切（包括 UTF-8 多字节序列中间），
+ *     `TextDecoderStream` 负责把它拼回去。
+ *
+ * 与其他模块的连接点：
+ *   - `adapter.ts` 把 `fetch().body`（= `ReadableStream<Uint8Array>`）
+ *     喂给本文件
+ *   - `translate.ts` 消费 `data` payload + 在收到 `[DONE]` 时收尾
+ *   - `onComment` 回调被接到 `idleWatchdog.pulse()`，让「provider 还在」
+ *     信号不止来自 data 帧
  */
 
 import { EventSourceParserStream } from 'eventsource-parser/stream'

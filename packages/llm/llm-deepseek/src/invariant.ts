@@ -1,6 +1,11 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-llm-deepseek`.
- * @module @deepseek-ai/dsh-llm-deepseek/invariant
+ * @file `dsh-llm-deepseek` 的 invariant companion 入口。
+ *
+ * 本包不暴露独立的 event 序列，也不在 `LlmRuntime` 之外维护可变数据关系——
+ * 所有「流式 chunk 符合 `StreamChunk` 协议」的不变量已经在 `dsh-llm`
+ * 的 invariant 路径上守了。`install` 留作未来挂「`llm/adapters-updated`
+ * 之后必须能 resolve 到一个真实 `deepseek-official` provider」之类
+ * 特定不变量时的占位。
  */
 
 /* jscpd:ignore-start */

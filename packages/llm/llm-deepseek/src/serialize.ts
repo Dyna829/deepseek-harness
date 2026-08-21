@@ -1,9 +1,34 @@
 /**
- * Serialize harness messages into DeepSeek chat completions. Text-only
- * requests retain string user content; the image path resolves durable
- * attachments into ordered data-URL parts. Tool-result images follow their
- * string-only tool messages in a separate user message.
- * @module dsh-llm-deepseek/serialize
+ * @file harness `Message` → DeepSeek (OpenAI 兼容) chat-completions wire 翻。
+ *
+ * 两条路径：
+ *   1. **纯文本路径**：user content 保留**字符串**（不是 parts 数组），跟
+ *      OpenAI 旧版兼容。
+ *   2. **图像路径**：把 durable attachment 解析成有序的 data-URL parts；
+ *      tool-result 块内嵌的图**独立**成一条 user message 跟在原 tool message
+ *      后面，因为 DeepSeek wire 不允许单条 user message 里既嵌 string tool
+ *      result 又嵌图。
+ *
+ * 关键不变量：
+ *   - **`off` 不写进 wire**：DeepSeek wire 只接受 `low/high/max`；`off` 是
+ *     harness 端的语义，本文件把它翻成 `thinking: 'disabled'`。这条对应
+ *     `reasoningEffort` 字段**不**出现在 wire payload。
+ *   - **purpose 决定 thinking 强制 disabled**：`session-title` 这种「不
+ *     需要思考、只想要短答」的 purpose 在 resolve 期硬关 thinking，不让
+ *     defaults 反向开启。
+ *   - **图像超容走 `offloadRequestImages`**：从最老的图开始替换为占位
+ *     `OFFLOADED_IMAGE_TEXT`，**不**删 durable 消息。session log 永远
+ *     完整保留原图，replay 时从 log 重建。
+ *   - **`reasoningEffort` 校验 `effort` 必须在已知集合**：未识别的 branded
+ *     id 直接 `UNSUPPORTED_REASONING_EFFORT` 拒——这条防线是上游
+ *     `resolveCallFor` 之后的二次守。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-llm.contentHasImage` 走单条递归判断「有没有图」
+ *   - `dsh-llm.offloadRequestImages` 在图像总量超限时裁老图
+ *   - `dsh-attachment.AttachmentStore` 解析图 bytes
+ *   - `types.ts` 定义 wire 形态
+ *   - 输出的 wire 形态由 `adapter.stream` 发给 provider
  */
 
 import { contentHasImage, LlmError, offloadRequestImages } from '@deepseek-ai/dsh-llm'
