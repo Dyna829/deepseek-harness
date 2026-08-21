@@ -1,4 +1,20 @@
 /**
+ * @file scope 感知注册表的共享存储原语。
+ *
+ * 提供 `NamedEntries` 和 `AnonymousEntries` 两种「按插入顺序保存的列表」：
+ *   - `NamedEntries<V>`：按 key 索引（重复 key 由调用方自己诊断）
+ *   - `AnonymousEntries<V>`：纯顺序列表（无 key）
+ *
+ * `ScopeLayer` 是「一个 scope 的所有表」的聚合（agent A 的 tool + prompt + listener 等等），
+ * 注册表可以按 layer 整体替换 —— 这就是「换一个 agent」的实现机制。
+ *
+ * 关键不变量：
+ *   - 迭代器对单代有效，迭代期间再插入不会被看到；
+ *   - 每次成功插入返回一个 idempotent 的 undo；
+ *   - 整体生命周期跟 effect 绑定（owner fiber 卸载时自动收尾）。
+ */
+
+/**
  * Shared insertion-ordered storage and effect ownership for scope-aware registries.
  *
  * @module @deepseek-ai/dsh-scope

@@ -1,4 +1,13 @@
 /**
+ * @file 自动生成：把「scope 过滤事件」从 dispatch 参数里抽出「主体」用的解析器表。
+ *
+ * **不要手改**！改完跑 `pnpm run gen-scoped-events` 重新生成。
+ *
+ * 比如 `agent/created` 事件，主体是参数 args[0]（payload）里的 `agent` 字段；
+ * 这个表告诉 invariant runner 怎么从 dispatch args 里把那个主体抽出来。
+ */
+
+/**
  * Generated scoped-event routing-subject resolvers for dsh-scope invariants.
  * Do not edit by hand; run `pnpm run gen-scoped-events`.
  *

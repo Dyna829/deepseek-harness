@@ -1,4 +1,19 @@
 /**
+ * @file agent preset 用的「tool 展示模式」选择器。
+ *
+ * 关键设计：
+ *   - tool registry 本身在 **host plane**（loop scheduler、API proxy、tool plugin 都用它），
+ *     所以不能放进 preset；
+ *   - 但「模型看到的是 native 还是 code-mode 还是 sdk 模式」**可以**属于 preset 决定
+ *     （每个 preset 配一次，覆盖所有挂上来的 agent）；
+ *   - 调用 `ctx.tools.presentAs('code', scope)` 在 scope 维度声明模式，整个 scope 内的
+ *     agent 都受影响。
+ *
+ * 强依赖检查：选 code mode 需要 `@deepseek-ai/dsh-code-runtime-worker-thread`；
+ * 本包会 `ctx.inject(['codeRuntime'])` 等它就绪再激活 —— 不在 prompt 时才报错。
+ */
+
+/**
  * Agent-plane presentation selector: the row an agent preset carries to say
  * which form of its tools the model sees.
  *

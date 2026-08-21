@@ -1,4 +1,12 @@
 /**
+ * @file agent-default-model 包的 invariant —— **故意为空**。
+ *
+ * 原因：本服务没有任何独立的事件关系 —— 所有可变值在 `currentSelection()` 看到之前
+ * 就已经被 settings 校验过了。空 installer 是为了在组合 invariant 集合时显式表达
+ * 「这里没有需要检查的事」。
+ */
+
+/**
  * Package-owned invariant companion for the default Agent model selection.
  *
  * The service owns no independent event relationship: settings registration

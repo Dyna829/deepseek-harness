@@ -1,4 +1,22 @@
 /**
+ * @file System prompt 装配中心。
+ *
+ * `ctx.systemPrompt` 是组装 system prompt 的唯一入口。它管理 4 类东西：
+ *   - **静态 sections**：有序的 system prompt 段落（persona、capability 描述等）
+ *   - **动态 contexts**：每次装配时根据当前状态渲染的「运行时上下文」段
+ *   - **tool schemas**：让 LLM 看到的工具清单
+ *   - **variables**：可被 prompt 模板引用的变量（provider、model、cwd 等）
+ *
+ * 工作模式：
+ *   - 各插件通过 `ctx.systemPrompt.section(...).text(...).order(...)` 注册段；
+ *   - `assemble(...)` 按 order 排序所有段 + 动态 context + tool schemas + variables，
+ *     通过 `system-prompt/assemble` 这个 waterfall 让监听者**最终**调整结果（authoritative）。
+ *
+ * 关键约束：监听者**不能**在 waterfall 之外的方式篡改 prompt —— 注册的 section 在
+ * waterfall 结束后会自动还原。
+ */
+
+/**
  * Registry for ordered system sections, dynamic context, tool schemas, and prompt variables.
  *
  * @module @deepseek-ai/dsh-system-prompt

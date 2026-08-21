@@ -1,3 +1,14 @@
+/**
+ * @file system-prompt 包自带的 invariant。
+ *
+ * 检查 prompt 装配的形状合法性：
+ *   - section / context 的 name 非空、唯一；
+ *   - text 字段必须是字符串；
+ *   - 变量名匹配 `^[a-z][a-z0-9_]*$`（lowercase snake case）。
+ *
+ * 这些是「装配结果能合法用」的最低保证。
+ */
+
 /** Package-owned prompt-assembly invariants. @module @deepseek-ai/dsh-system-prompt/invariant */
 
 import type { Context } from '@deepseek-ai/cordis'

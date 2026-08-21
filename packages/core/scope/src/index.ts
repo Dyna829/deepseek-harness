@@ -1,4 +1,18 @@
 /**
+ * @file Scope（作用域）原语：让 Cordis 上下文有「身份」概念，事件可以被「只发给某个 scope」。
+ *
+ * 核心抽象：
+ *   - `ScopeKey`：opaque 的 scope 标识，object identity 判等
+ *   - `createScope(parent, key)`：在 parent ctx 下面建一个子 ctx，标记它的 scope
+ *   - `scopeTarget(base, subject)`：造一个**仅用于事件路由**的 carrier，
+ *     把 subject 作为 `this` 传出去，让监听者注册时打上 `scope: subject` 标记
+ *   - `scopeOf(ctx)`：从 ctx 找出它属于哪个 scope
+ *
+ * 用途：dsh 里所有「agent 自己的事件」都通过 scope 路由 —— 「agent A 的 inbox 插了条消息」这件事
+ * 只会被 A 的监听者看到，不会泄漏到别的 agent。
+ */
+
+/**
  * Scoped-context primitive: mint a Cordis context that tags registrations with
  * an opaque identity and build routing-only event carriers for that identity.
  *

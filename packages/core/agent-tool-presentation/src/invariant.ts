@@ -1,4 +1,11 @@
 /**
+ * @file agent-tool-presentation 包的 invariant —— **故意为空**。
+ *
+ * 原因：本包只对 `ctx.tools` 做一次 scoped 调用，不持有自己的事件或快照。
+ * 它建立的「某个 agent 用哪个展示模式」这个关系由 `dsh-tools` 自己观察。
+ */
+
+/**
  * Package-owned invariant companion for `@deepseek-ai/dsh-agent-tool-presentation`.
  * @module @deepseek-ai/dsh-agent-tool-presentation/invariant
  */

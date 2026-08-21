@@ -1,4 +1,16 @@
 /**
+ * @file 「Agent 没有显式指定 model 时用什么 model」配置。
+ *
+ * 暴露一个 settings 段（`agent-default-model`）让用户/部署方配置：
+ *   - `provider`：默认 provider route
+ *   - `model`：默认 model id
+ *   - `reasoningEffort`：可选的 reasoning 强度
+ *
+ * agent 在没有 session 级别的 model 选择时，会回退到这里存的默认。
+ * 是个小但很常用的兜底配置。
+ */
+
+/**
  * Default model selection for an Agent without a session-specific selection.
  *
  * @module @deepseek-ai/dsh-agent-default-model

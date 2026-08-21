@@ -1,3 +1,15 @@
+/**
+ * @file scope 包自带的 invariant：拦截「scope 路由错配」的事件分发。
+ *
+ * 检查项：
+ *   1. 任何「scope 过滤事件」（如 `agent/*`）dispatch 时**必须**带 scope carrier 作为 `this`；
+ *      没有就是 fail，提示用 `agentEvents(ctx, agent)` 而不是直接发；
+ *   2. carrier 的 key 必须等于 payload 里的主体对象（不能拿 A 的 carrier 发 B 的事件）。
+ *
+ * 监听的是 `internal/dispatch`，是 Cordis 内部的钩子，所以能在事件真的到监听者之前
+ * 拦下来。
+ */
+
 /** Package-owned scoped-dispatch invariants. @module @deepseek-ai/dsh-scope/invariant */
 
 import type { Context } from '@deepseek-ai/cordis'
