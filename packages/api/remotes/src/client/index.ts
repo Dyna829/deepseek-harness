@@ -1,4 +1,27 @@
-/** Platform-neutral assembly of generated Host Remote contributions. */
+/**
+ * @file 平台无关的「Host Remote 贡献」Client 端装配。
+ *
+ * 本文件不实现 Remote 调用本身（那是 `dsh-api-gateway/client` 的事），只
+ * 负责**把哪些** Host 能力选进这一个 Client 装配体。选中的 namespace 列表
+ * 是**显式**写出来的（不是从某个 manifest 自动发现）——这样 client 编译
+ * face 和 host 编译 face 的「能调什么」是同一份静态清单，runtime 漂移不上
+ * 这里。
+ *
+ * 三段职责：
+ *   1. 拉 Owner 包 client-safe 的 `./types`（只 import type）让 `$on`
+ *      听到的事件参数签名是 Host 真发的那一份，不是某处重抄的；
+ *   2. 拉 `dsh-client-connection/client` 的 carrier 类型，让 business 包
+ *      只用这一个 facade 名字；
+ *   3. `apply(ctx)` 按顺序 `ctx.remote.$mount(...)` 每个 contribution，
+ *      失败时**反向**回滚已经挂上的——这条「回滚顺序 = 反向挂载顺序」保证
+ *      一个 namespace 不会在「挂在它后面的东西」被卸之前就被卸掉。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-api-gateway/client` 提供 `ctx.remote` Service
+ *   - `dsh-client-connection` 提供 RPC + 事件载体类型
+ *   - 选中名单里的每个 `*/remote` 是 owner 包在 Client 编译 face 下的 Remote
+ *     contribution
+ */
 
 import type { Context } from '@deepseek-ai/cordis'
 import commandsRemote from '@deepseek-ai/dsh-commands/remote'

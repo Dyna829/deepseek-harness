@@ -1,4 +1,37 @@
-/** Host BFF policy for resolving Remote Agent and Session identities. */
+/**
+ * @file Host 端「sessionId → 活 Agent」的解析策略（含 subagent 栅栏）。
+ *
+ * 三个 case 收敛到 `agentFor(sessionId)` 一个出口：
+ *   1. **已 live**：直接 `ctx.agents.get(sessionId)`，但如果该 session 是
+ *      subagent-owned（`origin === 'subagent'` 或 `parentSession` 链到当前
+ *      agent 头上），返回 `agent-busy` 错误而不是 agent——legacy API 路径
+ *      走这条栅栏；subagent routing 走自己的专门路径。
+ *   2. **已 attached（持久化记录存在但本进程没活起来）**：`ctx.sessions.get`；
+ *      同样的栅栏判定。
+ *   3. **冷身份**：`inspectApiRemoteSession` 走 `ctx.sessionPersistence` 拉
+ *      header+events，调 `ctx.agents.resume` 启动一次；`resumes` Map 防止
+ *      同一 sessionId 的并发冷启动重复发车，finally 时清掉。
+ *
+ * 关键不变量：
+ *   - **并发冷启动合并**：第二个相同 sessionId 的 caller 拿到的是同一个
+ *     `Promise<Agent>`，所以同一会话只有一次 `agents.resume`。
+ *   - **栅栏判定在多时机都重跑**：`fencedLiveAgent` / attached 检查 / resume
+ *     前 / resume 之后都得判一次，因为 `agents.resume` 内的 `setup` 可能 await
+ *     跨很久，期间 session ownership 可能被新路径接管。
+ *   - **错误身份化**：`ApiRemoteSessionNotFound`（冷身份找不到）→
+ *     `session-not-found`；`ApiRemoteSubagentSessionOwnership`（栅栏命中）
+ *     → `agent-busy`；其它 → `internal`，并且**不在错误里塞原始 stack**。
+ *
+ * 调 Typert lookup 的出口在文件末尾：把 `agentFor` 包成 `TypertLookupFailure`
+ * 抛出器，注册到 `typert.lookups.configure('agent' / 'session')` 和
+ * `typert.contexts.configureHost('agent')`。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-agent` 提供 `Agent` / `AgentOptions` / `AgentSetup`
+ *   - `dsh-session` 提供 `Session` / `SessionId` / `SessionHeader`
+ *   - `dsh-session-persistence` 提供 inspect/list
+ *   - `dsh-typert-registry` 提供 `TypertLookupFailure` 和 lookup 配置
+ */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, AgentSetup } from '@deepseek-ai/dsh-agent'
