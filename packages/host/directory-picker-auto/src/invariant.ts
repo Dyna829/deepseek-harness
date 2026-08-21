@@ -1,4 +1,11 @@
 /**
+ * @file `directory-picker-auto` 包的 invariant 伴生 plugin。
+ *
+ * 没有运行时不变式——`apply()` 的副作用（挂 Loader 条目）由 plugin fiber
+ * 自己托管理，`ctx.loader.store` 是 source of truth
+ */
+
+/**
  * Package-owned invariant companion for the adaptive directory-picker chooser.
  * @module @deepseek-ai/dsh-host-directory-picker-auto/invariant
  */

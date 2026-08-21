@@ -1,9 +1,16 @@
 /**
- * Boot-time backend resolution for the adaptive directory-picker composition:
- * one pure decision from sampled host facts to a concrete backend kind. The
- * caller samples exactly once per boot, so the mounted capability stays
- * stable for the service lifetime as the seam requires.
- * @module @deepseek-ai/dsh-host-directory-picker-auto/resolve
+ * @file 把「boot-time 采到的 host 事实」纯函数地映射到 native / browse。
+ *
+ * 决策轴（任一不满足就走 browse）：
+ *   1. `bindHost` 必须是 loopback：否则 webserver 暴露给远程浏览器，
+ *      远程没 OS chooser 弹
+ *   2. 没有 SSH_* 环境：SSH port-forward 下 chooser 弹在服务器上，看不见
+ *   3. 平台层：darwin/win32 默认可；linux 还要看 zenity/kdialog 在 PATH 上
+ *      且有 DISPLAY/WAYLAND_DISPLAY
+ *   4. 其它平台（freebsd 之类）一律 browse
+ *
+ * 不变量：函数是**纯**的；调用方只在 boot 时采一次，service 整个生命周期
+ * 都用同一份结果——seam 契约要求 capability() 引用稳定
  */
 
 import type { Config as HttpServerConfig } from '@deepseek-ai/dsh-host-webserver'

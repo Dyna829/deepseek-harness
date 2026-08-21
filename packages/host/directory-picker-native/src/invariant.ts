@@ -1,4 +1,10 @@
 /**
+ * @file `directory-picker-native` 包的 invariant 伴生 plugin。
+ *
+ * 每次 pick 是单次 subprocess 调用，chooser 输出 = 唯一结果，进程不持有状态
+ */
+
+/**
  * Package-owned invariant companion for the native directory-picker backend.
  * @module @deepseek-ai/dsh-host-directory-picker-native/invariant
  */

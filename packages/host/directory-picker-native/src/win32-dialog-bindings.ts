@@ -1,15 +1,17 @@
 /**
- * koffi-backed Win32 bindings for the folder dialog: the COM vtable calls
- * behind {@link Win32DialogBindings} plus the cross-thread window closer the
- * driver uses to service aborts. The module loads on every platform; koffi
- * itself is imported lazily inside each function, so non-Windows processes
- * never load it — the same containment as the repo's other `win32.ts`
- * modules.
+ * @file koffi-backed Win32 bindings：COM vtable 调用 + 跨线程 close。
  *
- * The COM surface used here (IModalWindow/IFileDialog/IFileOpenDialog and
- * IShellItem vtable order, the GUIDs, `FOS_*` and `SIGDN_FILESYSPATH`) is
- * frozen Windows ABI since Vista; slots are offsets into the vtable at the
- * object's first pointer.
+ * 模块本身在**所有平台**都能 import；koffi 在每个函数内部 lazy
+ * `import('koffi')`，非 win32 进程不加载它——和仓库里其它 `win32.ts` 一致。
+ *
+ * 用到的 COM 面（`IModalWindow` / `IFileDialog` / `IFileOpenDialog` /
+ * `IShellItem` 的 vtable 顺序、CLSID/IID GUID、`FOS_*` 和 `SIGDN_FILESYSPATH`）
+ * 都是 Vista 起冻结的 Windows ABI，slot 编号 = 对象首指针的偏移。
+ *
+ * 与其他模块的连接点：
+ *   - `win32-dialog-logic.ts` 是「纯 sequencing」；它调本模块的
+ *     `Win32DialogBindings` 抽象
+ *   - `closeThreadWindows` 被 driver (`win32-dialog.ts`) 当 abort 杠杆用
  */
 
 import type { Win32DialogBindings, Win32FolderDialog } from './win32-dialog-logic.ts'

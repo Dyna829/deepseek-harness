@@ -1,3 +1,10 @@
+/**
+ * @file `directory-picker` 包的 invariant 伴生 plugin。
+ *
+ * 包内没有运行时不变式（词汇表是 stateless 的，filesystem 真正状态在 fs
+ * 本身），所以这里只做「包级占位」让 `ctx.invariants` 能识别本包
+ */
+
 /** Package-owned invariant companion for the directory-picker seam. @module @deepseek-ai/dsh-host-directory-picker/invariant */
 
 import type { Context } from '@deepseek-ai/cordis'

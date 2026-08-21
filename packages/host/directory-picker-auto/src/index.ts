@@ -1,4 +1,23 @@
 /**
+ * @file 启动时按环境自动选「native vs browse」directory-picker 的组合包。
+ *
+ * 一次性 boot-time 决议，mount 一对 Loader 条目（host backend + client surface）
+ * 一起挂到 in-memory root tree：
+ *   - host 端：给 `ctx.directoryPicker` 提供 native 或 browse 实现
+ *   - client 端：补 ui-workspace 的「选目录」UI 面板
+ *
+ * 关键不变式：「native」和「browse」互斥——同时挂两个 `ctx.directoryPicker`
+ * 实现会冲 Cordis 的 duplicate-service。本包只挂决议**胜出**的那一对，
+ * 想钉死某一对就直接用 `-native` 或 `-browse` 而不用 `-auto`。
+ *
+ * 与其他模块的连接点：
+ *   - 输入：ctx.webServer.host（决定 SSH/远程可能性）+ process.env + PATH probe
+ *   - 输出：ctx.loader.create({ name }) 两条 mount，dispose 反向 unmount
+ *   - 包元数据里 BACKEND_PACKAGES / SURFACE_PACKAGES 是硬编码的常量字符串
+ *     词汇表，不是 tunable
+ */
+
+/**
  * Adaptive chooser of the directory-picker seam: resolves the host's
  * situation once at boot (bind host, SSH launch, display session, Linux
  * chooser binary) and mounts the matching interaction — `native` or `browse`

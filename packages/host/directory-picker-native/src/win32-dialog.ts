@@ -1,9 +1,18 @@
 /**
- * Main-thread driver for the Win32 folder dialog: spawns the dialog child
- * process (which blocks inside the modal `Show`), maps its message protocol
- * onto a promise, and services aborts by posting `WM_CLOSE` to the dialog
- * thread's windows until the child reports back. The real process/window
- * surface is injectable so every driver path is testable on any platform.
+ * @file Win32 文件夹对话框的主线程 driver：spawn 子进程 + 服务 abort。
+ *
+ * 子进程在 modal `Show` 内阻塞，所以：
+ *   1. 主进程 event loop 不死
+ *   2. driver 透过 IPC 拿子进程的 `{kind:'showing',threadId}` 通知记录
+ *      dialog 线程 native id（abort 杠杆的前提）
+ *   3. abort 时反复 `WM_CLOSE` 那个线程上所有窗口直到子进程回话
+ *
+ * 「真实 process/window 表面」（spawn / closeThreadWindows）全可注入，
+ * 让所有 driver 分支可被确定性测试（`Win32DialogInternals`）。
+ *
+ * 与其他模块的连接点：
+ *   - `win32-dialog-host.ts` 给生产态的真实 spawn + koffi close
+ *   - `win32-dialog-worker.ts` 是子进程入口
  */
 
 import { closeThreadWindows as hostCloseThreadWindows, spawnDialogWorker } from './win32-dialog-host.ts'

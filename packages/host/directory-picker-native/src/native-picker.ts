@@ -1,4 +1,19 @@
-/** Cross-platform native single-directory chooser behind the native backend's capability. */
+/**
+ * @file 跨平台 native 单目录 chooser 入口：按 `process.platform` 分发。
+ *
+ *   - macOS: `osascript -e 'choose folder'`，cancel 通过 exit code 1 + stderr `-128` 识别
+ *   - Windows: 委托给 `pickWin32Directory`（koffi+COM 的现代 `IFileOpenDialog`）
+ *   - Linux: `zenity` 优先，缺则 `kdialog`；都缺则抛「no supported」
+ *   - 其它平台: 抛 `unsupported on ${platform}`
+ *
+ * 所有平台细节都在这里（`ctx.directoryPicker` adapter 不感知），
+ * `internals` 参数把 `process.platform` / `run` / win32 对话框都做成可注入
+ * 钩子，让所有分支可被确定性测试。
+ *
+ * 与其他模块的连接点：
+ *   - `runNativeCommand` 来自 `@deepseek-ai/dsh-native-command`（包外）；不
+ *     走 shell，永远直接 spawn
+ */
 
 import { runNativeCommand, type NativeCommandRunner } from '@deepseek-ai/dsh-native-command'
 import { pickWin32Directory } from './win32-dialog.ts'

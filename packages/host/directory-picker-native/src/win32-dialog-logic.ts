@@ -1,9 +1,18 @@
 /**
- * Pure sequencing of the Win32 `IFileOpenDialog` folder-picker COM
- * conversation over injectable platform bindings, so every outcome path
- * (selection, cancellation, HRESULT failure, cleanup ordering) is testable on
- * any platform. The koffi-backed bindings live in
- * `win32-dialog-bindings.ts`, which only a real win32 process ever loads.
+ * @file Win32 `IFileOpenDialog` 文件夹 chooser 的纯 sequencing 包装。
+ *
+ * 不持有任何 native 句柄——只接受一个 `Win32DialogBindings` 注入，把
+ * 「DPI opt-in → STA init → 创建 dialog → SetOptions/SetTitle → 通知
+ * threadId → Show → 读 result → 释放」编成一个事务。
+ *
+ * 为何不把 COM 步骤直接写在 bindings 里：让**所有** outcome 路径
+ * （选目录 / 取消 / HRESULT 失败 / 清理顺序）都被确定性测试覆盖。
+ * 真 koffi bindings 只在 win32 上由 `win32-dialog-bindings.ts` 加载。
+ *
+ * 与其他模块的连接点：
+ *   - 仅被 `win32-dialog-worker.ts`（子进程入口）调
+ *   - `onShowing` 回调把 native threadId 透给 driver，driver 才知道对哪个
+ *     线程发 `WM_CLOSE`
  */
 
 /** `HRESULT_FROM_WIN32(ERROR_CANCELLED)`: the user dismissed the dialog. */

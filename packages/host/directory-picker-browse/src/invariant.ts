@@ -1,4 +1,10 @@
 /**
+ * @file `directory-picker-browse` 包的 invariant 伴生 plugin。
+ *
+ * `list` / `createDirectory` 都是无状态 fs 调用，filesystem 本身就是真相
+ */
+
+/**
  * Package-owned invariant companion for the browse directory-picker backend.
  * @module @deepseek-ai/dsh-host-directory-picker-browse/invariant
  */

@@ -1,12 +1,21 @@
 /**
- * Child-process entry for the Win32 folder dialog: blocks THIS process
- * inside the modal `Show` so the host event loop stays live, reporting over
- * the IPC channel. Spawned as a child process (not a worker thread) so the
- * dialog is the process's first window and Windows activates it without a
- * manual foreground call. Protocol: `{kind:'showing',threadId}` right
- * before the blocking call (the driver's abort lever needs the native
- * thread id), then exactly one of `{kind:'done',path}` or
- * `{kind:'error',message}`.
+ * @file Win32 文件夹对话框的子进程入口。
+ *
+ * 在 `Show` 内阻塞**这个子进程**——主进程 event loop 不死。用子进程
+ * （而不是 worker_thread）是因为：dialog 是该进程的**首**个窗口，
+ * Windows 不用手动 `SetForegroundWindow` 也会激活它。
+ *
+ * IPC 协议：
+ *   1. `Show` 前发 `{kind:'showing', threadId}`——driver 的 abort 杠杆
+ *      需要 native thread id 才能 `WM_CLOSE` 那条线程上的窗口
+ *   2. Show 返回后发**恰好一条** `{kind:'done', path|null}` 或
+ *      `{kind:'error', message}`
+ *   3. 退出时 `disconnect` IPC，driver 任何先 settle 的 promise 都被视为完成
+ *
+ * 与其他模块的连接点：
+ *   - 由 `win32-dialog-host.ts` 的 `spawnDialogWorker` 拉起
+ *   - 内部分别调 `win32-dialog-bindings.ts`（koffi）和
+ *     `win32-dialog-logic.ts`（纯 sequencing）
  */
 
 import { loadWin32DialogBindings } from './win32-dialog-bindings.ts'

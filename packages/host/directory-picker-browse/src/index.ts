@@ -1,4 +1,23 @@
 /**
+ * @file `directory-picker` 的 browse 后端：一次一层列目录 + 创建子目录。
+ *
+ * 用 Node stdlib 的 `fs/promises` + `path`（操作系统适配由 stdlib 负责），
+ * **不在 host 屏幕渲染任何东西**——这是它和 native 后端最大的区别，也是
+ * 远程客户端唯一可用的 backend。
+ *
+ * 关键算法/不变式：
+ *   - `boundedInsert`：`list` 用一个大小为 `maxEntries + 1` 的 name-sorted
+ *     sliding window 扫 dirent，内存永远 O(maxEntries) 不被超大目录撑爆
+ *   - `fullyQualified`：browse **拒绝**任何相对路径或盘符/UNC 不完整路径——
+ *     这些若用 `resolve()` 会被「当前 cwd/当前盘」rebase，把 web 值换成本地
+ *     路径是严重越权
+ *   - `raceAbort`：每个 fs 等待都跟 abort signal race，保证一个断网客户端
+ *     不能让一次 opendir 跨请求活着
+ *   - 隐藏条目：POSIX 按 `.` 前缀判定（Windows 隐藏属性 dirent 不暴露），
+ *     **返回但标记**——是否展示由前端决定
+ */
+
+/**
  * Browse backend of the directory-picker seam: registers `ctx.directoryPicker`
  * with the `browse` capability — one-level directory listing and child-directory
  * creation over the host filesystem via Node's stdlib (which already carries
@@ -183,7 +202,17 @@ export interface Config {
   maxEntries: number
 }
 
-/** The `ctx.directoryPicker` browse implementation (stable capability object per service life). */
+/**
+ * The `ctx.directoryPicker` browse implementation (stable capability object per service life).
+ *
+ * @description 中文说明：
+ *   `BrowseDirectoryPicker` 把 Node stdlib 的 fs/path 操作**装**成 seam
+ *   暴露的 `browse` capability。它是 fs 的薄壳，但有两件事不是薄壳：
+ *     1. `boundedInsert` sliding window 把 O(目录大小) 内存压到 O(maxEntries)
+ *     2. `raceAbort` 把每个 fs 等待都跟 abort signal race，使断网客户端
+ *        不能挂住 opendir
+ *   配置只暴露一个 `maxEntries`（默认 1000，对齐 GitHub web UI）。
+ */
 export default class BrowseDirectoryPicker extends DirectoryPicker {
   /**
    * `maxEntries` bounds the complete listing level a single `list` call may

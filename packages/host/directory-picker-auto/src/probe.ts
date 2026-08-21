@@ -1,4 +1,15 @@
 /**
+ * @file Linux 端 PATH 上 zenity/kdialog 是否可执行的探针。
+ *
+ * 只对 resolver 暴露一个「是/否」bool，纯函数：把 PATH 字符串拆 delimiter
+ * 拼路径，调 `isExecutable`（生产 = `accessSync(X_OK)`，测试可注入）。
+ *
+ * 为何要单独抽出来：让 `-auto` 的 boot-time 决策在非 Linux 主机/无
+ * chooser 二进制的 CI 上**永远不**调起 native 后端——后者会**每个** pick
+ * 都失败，而不是缺一个清晰的「走 browse」分支
+ */
+
+/**
  * PATH probe for the native backend's Linux chooser binaries: one boot-time
  * sampled fact for the resolver, so an attended Linux host without
  * zenity/kdialog keeps the working `browse` interaction instead of a backend

@@ -1,4 +1,20 @@
 /**
+ * @file 目录选择(workspace 选定)的 `ctx.directoryPicker` 能力 seam 入口。
+ *
+ * 本包**只**定义词汇表 + 抽象服务——具体走「OS 原生 chooser」还是「应用内
+ * 浏览器列目录」由 backends 实现：
+ *   - `directory-picker-native`  / `...-browse` 是两个**互斥**的 backend
+ *   - `directory-picker-auto` 启动时按环境（SSH/绑 host/有无 zenity）选一个挂上
+ *
+ * 与其他模块的连接点：
+ *   - 这是一个合并可扩展(discriminated union)的 capability——后端新增 kind
+ *     用 declaration merging 扩 `DirectoryPickerCapabilities` 即可
+ *   - 消费者（如 web UI）`switch` on `capability().kind`；未知 kind 按文档应
+ *     隐藏入口而不是 fail
+ *   - 不与具体 filesystem 路径解析耦合：browse backend 强制全限定路径
+ */
+
+/**
  * Service Definition for the `ctx.directoryPicker` capability seam: how the web-GUI host lets an operator
  * select a workspace directory. Backends differ in interaction shape, not
  * just mechanism, so the service exposes a discriminated capability instead
@@ -127,6 +143,12 @@ declare module '@deepseek-ai/cordis' {
  * implementation per context; loading a second throws, cordis' standard
  * duplicate-service behavior). The capability object must be stable for the
  * service lifetime: consumers may capture it across calls.
+ *
+ * @description 中文说明：
+ *   服务定义的抽象基类。每个 backend（`native` / `browse`）是它的一个
+ *   子类；plugin 加载时自动注册成 `ctx.directoryPicker`。`capability()`
+ *   返回的对象**必须**在服务生命周期内保持同一引用（消费者可能跨调用捕获
+ *   它），所以一般用 frozen 字段而不是每次新建。
  */
 export abstract class DirectoryPicker extends Service {
   constructor(ctx: Context) {

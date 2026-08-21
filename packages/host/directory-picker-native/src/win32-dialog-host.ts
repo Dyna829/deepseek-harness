@@ -1,10 +1,18 @@
 /**
- * Real-process half of the Win32 dialog driver: spawn the dialog child
- * process (source or built plane) and close a dialog thread's windows. The
- * module itself loads everywhere (the import chain from native-picker.ts is
- * static); what stays win32-only is koffi, imported dynamically inside the
- * bindings' functions. The driver's logic is tested against fakes of this
- * surface instead.
+ * @file Win32 dialog driver 的「真实进程」半：spawn 子进程 + 跨线程关窗。
+ *
+ * 模块本身在所有平台都加载（`native-picker.ts` 静态 import），koffi 仍由
+ * `win32-dialog-bindings.ts` 内部 lazy import——driver 单元测试在所有平台
+ * 都跑，靠**模拟本模块的接口**而不是真 spawn。
+ *
+ * 子进程 fork 时机：
+ *   - built 输出（`.cjs` 旁车）：直接 `node ./worker.cjs`
+ *   - source（`.ts` 走 tsx）：`node --import tsx/esm ./win32-dialog-worker.ts`
+ *   （和 `dsh` CLI 的 source launch 同一套机制）
+ *
+ * 与其他模块的连接点：
+ *   - 唯一消费者是 `win32-dialog.ts`（driver）
+ *   - 复用 `closeThreadWindows`（实际委托回 `win32-dialog-bindings.ts`）
  */
 
 import { spawn, type StdioOptions } from 'node:child_process'
