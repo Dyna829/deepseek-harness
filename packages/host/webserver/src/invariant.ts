@@ -1,6 +1,29 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-host-webserver`.
- * @module @deepseek-ai/dsh-host-webserver/invariant
+ * @file `dsh-host-webserver` 的 invariant companion 入口。
+ *
+ * 守的关系：「HTTP / upgrade route 的 register ↔ dispose **必须**对称」——
+ * 拥有 route 的 fiber unload 之后，route table **不**能再回答那一条
+ * path（**不**然一个 disposed plugin 的 handler 还在被调，反信号）。
+ *
+ * 关键不变量（写代码容易绕过的）：
+ *   - **「检查时机 = 每次 fiber teardown」**：`internal/plugin` 事件
+ *     在 `internal/status: UNLOADING` 之后发——本 invariant 在那里
+ *     probe。
+ *   - **「Probe 用 reserved path」**：注册一条 reserved path route
+ *     + 立刻 dispose，再注册**同** path——如果 dispose 漏了，第二
+ *     次 register 会**因 duplicate 抛**——「`register(probe)()` 两
+ *     次」这条**两**语句是 asymmetry 探针：第一次 cycle 漏 dispose
+ *     → 第二次抛。
+ *   - **「reserved path 永不污染 table」**：每对 `register(probe)()`
+ *     是「register + 立刻 dispose」，table **不**留任何 probe 痕迹。
+ *   - **`global: true` listener**：**不**绑特定 service 生命周期——
+ *     invariant 在整个 root tree 范围都活。
+ *
+ * 与其他模块的连接点：
+ *   - `index.ts` 的 `register` / `registerUpgrade` 是被 probe 的目标
+ *   - `cordis` 的 `internal/plugin` 是触发时机
+ *   - 任何 composition 装了 `dsh-host-webserver` 都会自动**装**本
+ *     companion（**不**是 optional）
  */
 
 /* jscpd:ignore-start */

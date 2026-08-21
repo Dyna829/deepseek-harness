@@ -1,11 +1,38 @@
 /**
- * @deepseek-ai/dsh-host-webserver — Web route-registration plugin: a node:http
- * server plus the `webServer` service (HTTP and upgrade route registries,
- * index transform taps, and the single fallback seat for everything no route
- * claims). Knows no harness concepts and serves no files; the composing
- * application's frontend plugin owns dist serving through the fallback hook.
- * Web shape only — Electron loads dist over file:// and carries fetch over an
- * IPC bridge. This package never prints: the URL line belongs to the shell.
+ * @file `dsh-host-webserver`——Web route 注册插件：`node:http` server +
+ * `webServer` 服务（HTTP / upgrade route 注册表、index transform taps、
+ * 唯一 fallback seat）。
+ *
+ * 关键设计点（**写代码容易绕过的**）：
+ *   - **「Knows no harness concepts / serves no files」**：本包**不**认识
+ *     `Session` / `Agent` 之类领域概念，**不**做 dist serving。frontend
+ *     plugin 通过 fallback hook 挂 dist；其它 route 自己处理。
+ *   - **「Web shape only」**：Electron 走 `file://` 加载 dist，fetch 走
+ *     IPC bridge——**不**走本 http server。本包是「web 形状」的唯一
+ *     carrier。
+ *   - **「Activation listens immediately」**：服务构造完**立刻** listen，
+ *     不是 route 注册后才 listen——fallback route 没挂上时**未认领**的
+ *     请求在 startup 期间返 404。
+ *   - **「Duplicate (kind, path) throws」**：`register` 重名直接 throw——
+ *     route pattern 是 composition-level 合同，**冲突 = 配错**。
+ *   - **「This package never prints」**：URL line 是 shell 的活——不
+ *     在本包 stdout / stderr 印「listening on ...」之类，让 carrier 决定
+ *     怎么 surface。
+ *   - **「Index taps 是 ordered 链」**：`applyIndexTaps(html)` 依次过
+ *     每一 tap（boot-manifest 注入等），**不**让任何 tap 看到别人的
+ *     「patched by me」差异。
+ *   - **「`port: 0` 拿 OS 分配」**：`listenedPort` getter 返**实际** listen
+ *     到的 port（**不**是 config.port 当 0 的时候）——`fetch/handler.ts`
+ *     之类下游可以拿 `port` 拼真 URL。
+ *
+ * 与其他模块的连接点：
+ *   - `host/apiproxy` 的 `fetch/handler.ts` 通过 `register({ kind: 'prefix',
+ *     path: '/api' })` 挂载
+ *   - `host/frontend-static` 通过 `registerFallback` 拿唯一 fallback seat
+ *   - `host/directory-picker-*` 之类不直接用本包（它们挂 apiproxy 的
+ *     RPC 路径）
+ *   - `node:http` 的 `createServer` 是底层
+ *   - `cordis` effect 体系管 listener lifecycle
  */
 
 import { createServer } from 'node:http'
