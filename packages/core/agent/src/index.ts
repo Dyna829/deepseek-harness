@@ -1,4 +1,20 @@
 /**
+ * @file Agent 服务入口（`ctx.agents`）。
+ *
+ * 这个包只负责两件事：
+ *   1. 维护「当前进程内活跃的 Agent 集合」，并对外暴露成 Cordis 服务（`ctx.agents`）；
+ *   2. 用「工厂（Factory）」模式把 Agent 的具体创建逻辑委托给 loop 包（@deepseek-ai/dsh-agent-loop）。
+ *
+ * 本包**不**负责「怎么跑 Agent」——那是 loop 包的事。
+ *
+ * 中文术语速查（与 docs/architecture.zh.md 对齐）：
+ *   - 服务(Service)         = Cordis 的 `class Xxx extends Service`，挂到 ctx 后用 `ctx.x` 访问
+ *   - 可逆效果(Effect)      = `ctx.effect(() => …)` 注册的、可在 fiber 卸载时被反注册的回调
+ *   - 发起者(Initiator)     = 本进程内某次「以 Agent 身份发起」异步调用的源头，用 AsyncLocalStorage 传递
+ *   - 工厂(Factory)         = 实际干活的实现，本包只通过接口调用，不耦合具体实现
+ */
+
+/**
  * Agent service: live registry, factory delegation, and process-local
  * initiator scope. Concrete creation and driving belong to the loop.
  *
@@ -252,6 +268,16 @@ interface FactorySlot {
  * remain explicit, as does identity at worker, process, persistence, and wire
  * boundaries. Returned Promise boundaries drain during teardown, except a
  * nested lineage that starts an owning-fiber unload is excluded from its own drain.
+ *
+ * @description 中文说明：
+ *   这是 dsh 中「Agent 生命周期」的中心表。
+ *
+ *   - 单一职责：只管「谁活着、谁在等、谁在退出」，不写 loop 循环本身；
+ *   - 工厂解耦：具体怎么创建 Agent 由 loop 包通过 `setFactory` 注入，本包只留接口；
+ *   - 发起者追踪：用 Node 的 `AsyncLocalStorage` 跨 await 边界传递「当前是谁在驱动这个调用链」，
+ *     用于日志、追踪指标、跨组件归属；
+ *   - 生命周期一致性：内部用 Cordis 的可逆 effect 把自己绑在服务 fiber 上，
+ *     fiber 卸载时本服务的状态机也自动收尾（drain + dispose）。
  */
 export class AgentRegistry extends Service {
   private store = new Map<SessionId, AgentEntry>()
