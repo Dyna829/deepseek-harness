@@ -1,6 +1,36 @@
 /**
- * Provider-routed model-request retry policy on the agent loop's request
- * recovery extension point. Each scheduled retry is durable before its cancellable wait.
+ * @file Provider-routed model-request retry policy，挂在 agent loop 的
+ * 「request 失败」扩展点上。
+ *
+ * 关键设计点（**写代码容易绕过的**）：
+ *   - **「每次 schedule retry 前先持久化」**：在 `cancellableDelay`（用户可
+ *     取消的等待）**之前**就 `agent.session.append('llm/retry', ...)`——
+ *     「已经决定要 retry」这件事必须先落 session log，crash 之后从 log
+ *     重建能知道「我上次决定要重试 / 还没等到重试开始」。
+ *   - **`llm/retry-started` 在 delay 完成**之后**：等到真要重试了再 append
+ *     这条——区分「计划中」vs「正在重试」两个状态。
+ *   - **`always` 模式先把 `next()` 的 decision 拿全**：让下游 listener
+ *     （用户 / deployment 自己的策略）有机会先说一句话；说 `retry` 就
+ *     透传，其它情况走本地 backoff。
+ *   - **`AbortSignal.any([caller.signal, lifetime.signal])` 双重熔断**：
+ *     caller 取消 OR 插件卸载 → 立刻停。lifetime signal 还在 mean 我们
+ *     不让 stale callback 跳进下游 policy。
+ *   - **`policy.retryableCodes` 严格白名单**：`normal` 模式下，failure
+ *     code 不在白名单上 → 直接 `next()` 透传，**不** retry。
+ *   - **`providerRetryAfterMs > policy.maxDelayMs` 在 `normal` 模式直接放弃**：
+ *     provider 让你等「比我的最大 delay 还久」——它都觉得你不该再试了；
+ *     `always` 模式无此上界。
+ *   - **同 policy + 同 (turn, step, provider) 的 `retry` 计数持久化**：
+ *     从 session log 找最后一个 `llm/retry` 事件来恢复 `previousRetry`，
+ *     跨 fiber / 跨重启连续计数——不会「重启一次 retry 配额重置」。
+ *
+ * 与其他模块的连接点：
+ *   - `agent/request-error` waterfall 来自 `dsh-agent`（agent loop 的 request
+ *     失败扩展点）
+ *   - 失败分类读 `LlmFailure.code`，与 `dsh-llm` 共享
+ *   - `dsh-session` 提供 `session.append`（持久化）
+ *   - `dsh-timeout` 提供 `MAX_TIMER_DELAY_MS` 上界
+ */
  *
  * @module @deepseek-ai/dsh-llm-retry
  */

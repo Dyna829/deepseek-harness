@@ -1,4 +1,40 @@
-/** Package-owned durable retry-event invariants. @module @deepseek-ai/dsh-llm-retry/invariant */
+/**
+ * @file `dsh-llm-retry` 自己的 invariant companion。
+ *
+ * 守的边界是「`llm/retry` / `llm/retry-started` 两个 session event 的
+ * 持久化不变量」——**写代码容易绕过的**几条：
+ *   - **`llm/retry` 必须落在 open turn + open step 里**：replay 时这一步
+ *     不在 turn 上下文里就是「事件没绑在它的 step 上」，恢复时无法
+ *     决定「这一步要不要真的发起重试」。
+ *   - **`retry` 单调递增 + 同一 policy chain 共享 `retryId`**：从
+ *     session log 找前一个同 `(turn, step, provider, policyKey)` 的
+ *     `llm/retry`，下一个 `retry` 必须等于「`prior.retry + 1`」；
+ *     链上所有 retry 共用一个 `retryId`。这条让 crash 恢复能识别
+ *     「这是同一条 chain」——而不是把每个 retry 当独立事件。
+ *   - **`retry` 不超过 `maxRetries`（normal 模式）**；`always` 模式
+ *     `maxRetries` 字段必须 absent。
+ *   - **`delayMs ≤ MAX_TIMER_DELAY_MS`**：Node setTimeout 大值立刻触发。
+ *   - **`provider` 必须等于「当前 open step 的 routed provider」**：
+ *     防止「给 OpenAI 配的 retry 用在了 Anthropic 失败上」这种 cross-route
+ *     误挂事件。
+ *   - **`llm/retry-started` 配对**一个 scheduled `llm/retry` + **不重复**：
+ *     同一个 `retryId` + `retry` 不能 emit 两次 started（replay 不该
+ *     看到「同一个等待完成了两次」）。
+ *
+ * 同时跑两条路：
+ *   - **`session/created` 路径** —— 启动时跑一遍已有 session（**不**新建
+ *     监听器，invariants 框架自己管生命周期）；
+ *   - **`internal/dispatch` 路径** —— 每条 `session/event` 进入都验。
+ *     global listener，**不**绑特定 session。
+ *
+ * 与其他模块的连接点：
+ *   - `dsh-invariants` 的 `InvariantFailure` / `InvariantInstaller` 框架
+ *   - `dsh-session` 的 `Session` / `SessionEvent` 提供历史
+ *   - `history.ts` 的 `providerForOpenStep` 提供「当前 open step 的 routed
+ *     provider」查询
+ *   - `dsh-llm` 的 `LlmFailure` 是 retry 事件里 failure 字段的 schema
+ *   - `dsh-timeout` 提供 `MAX_TIMER_DELAY_MS` 上界
+ */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
